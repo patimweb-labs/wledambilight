@@ -972,10 +972,8 @@ impl App {
                             (t, c)
                         }
                     };
-                    theme::status_pill(ui, &text, color);
-                    ui.add_space(10.0);
-                    // one plain toggle, right where the mode is visible: on =
-                    // test picture, off = screen
+                    // the mode switch comes first, the status (with the frame
+                    // rate) behind it
                     let mut test_on = self.cfg.settings.test_image;
                     let tip = if capture::test_picture_forced() {
                         tr(
@@ -994,6 +992,8 @@ impl App {
                     {
                         self.set_test_image(test_on);
                     }
+                    ui.add_space(10.0);
+                    theme::status_pill(ui, &text, color);
 
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         let manual = self.tray_state.manual_pause.load(Ordering::Relaxed);
