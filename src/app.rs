@@ -1786,33 +1786,9 @@ impl App {
                             },
                         );
                         if selected {
-                            ui.with_layout(
-                                egui::Layout::right_to_left(egui::Align::Center),
-                                |ui| {
-                                    if icons::button_tinted(
-                                        ui,
-                                        Icon::Trash,
-                                        tr("Zone löschen (Entf)", "Delete zone (Del)"),
-                                        Some(theme::CORAL),
-                                    ) {
-                                        remove = Some(i);
-                                    }
-                                    if icons::button(
-                                        ui,
-                                        Icon::ChevronDown,
-                                        tr("Nach hinten", "Move down"),
-                                    ) {
-                                        moved = Some((i, 1));
-                                    }
-                                    if icons::button(
-                                        ui,
-                                        Icon::ChevronUp,
-                                        tr("Nach vorne", "Move up"),
-                                    ) {
-                                        moved = Some((i, -1));
-                                    }
-                                },
-                            );
+                            // room for the buttons, which are drawn on top of
+                            // this row afterwards (see below)
+                            ui.add_space(92.0);
                         }
                     });
                 })
@@ -1827,6 +1803,34 @@ impl App {
             }
             if !selected {
                 click.on_hover_cursor(egui::CursorIcon::PointingHand);
+            }
+            if selected {
+                // The buttons are added *after* the row interaction: egui gives
+                // the click to the widget that was added last, so this order is
+                // what makes the arrows and the bin work at all.
+                let bar = Rect::from_min_max(
+                    Pos2::new(resp.rect.right() - 100.0, resp.rect.top() + 3.0),
+                    Pos2::new(resp.rect.right() - 8.0, resp.rect.bottom() - 3.0),
+                );
+                let mut bar = ui.new_child(
+                    egui::UiBuilder::new()
+                        .max_rect(bar)
+                        .layout(egui::Layout::right_to_left(egui::Align::Center)),
+                );
+                if icons::button_tinted(
+                    &mut bar,
+                    Icon::Trash,
+                    tr("Zone löschen (Entf)", "Delete zone (Del)"),
+                    Some(theme::CORAL),
+                ) {
+                    remove = Some(i);
+                }
+                if icons::button(&mut bar, Icon::ChevronDown, tr("Nach hinten", "Move down")) {
+                    moved = Some((i, 1));
+                }
+                if icons::button(&mut bar, Icon::ChevronUp, tr("Nach vorne", "Move up")) {
+                    moved = Some((i, -1));
+                }
             }
             ui.add_space(2.0);
         }
@@ -3185,6 +3189,186 @@ mod tests {
         assert_eq!(shifted_start(Some(80), 0, 10, 80), 80);
         // a block as long as the whole device can only sit at 0
         assert_eq!(shifted_start(Some(0), 0, 10, 0), 0);
+    }
+
+    #[test]
+    fn a_row_registered_after_its_buttons_steals_their_clicks() {
+        // The counter-check to the test below: with the old order (row
+        // interaction added after the buttons) the row wins and the buttons are
+        // dead - exactly the bug where the up/down arrows did nothing.
+        use egui::{Event, PointerButton, RawInput};
+
+        #[derive(Default)]
+        struct Hit {
+            row: bool,
+            up: bool,
+            pos: Option<Pos2>,
+        }
+
+        fn buttons(ui: &mut egui::Ui, rect: Rect, hit: &mut Hit) {
+            let mut bar = ui.new_child(
+                egui::UiBuilder::new()
+                    .max_rect(rect)
+                    .layout(egui::Layout::right_to_left(egui::Align::Center)),
+            );
+            let up = bar.add(egui::Button::new("^"));
+            if up.clicked() {
+                hit.up = true;
+            }
+            hit.pos = Some(up.rect.center());
+        }
+
+        fn row(ui: &mut egui::Ui, rect: Rect, hit: &mut Hit) {
+            let click = ui.interact(rect, ui.scope_id().with("row"), Sense::click());
+            if click.clicked() {
+                hit.row = true;
+            }
+        }
+
+        fn draw(ui: &mut egui::Ui, hit: &mut Hit, row_first: bool) {
+            let resp = egui::Frame::new()
+                .inner_margin(egui::Margin::symmetric(10, 6))
+                .show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label("Oben");
+                        ui.add_space(92.0);
+                    });
+                })
+                .response;
+            let bar = Rect::from_min_max(
+                Pos2::new(resp.rect.right() - 100.0, resp.rect.top() + 3.0),
+                Pos2::new(resp.rect.right() - 8.0, resp.rect.bottom() - 3.0),
+            );
+            if row_first {
+                row(ui, resp.rect, hit);
+                buttons(ui, bar, hit);
+            } else {
+                buttons(ui, bar, hit);
+                row(ui, resp.rect, hit);
+            }
+        }
+
+        let click_position = |row_first: bool| {
+            let ctx = egui::Context::default();
+            let screen = Rect::from_min_size(Pos2::ZERO, Vec2::new(400.0, 200.0));
+            let input = |events: Vec<Event>| RawInput {
+                screen_rect: Some(screen),
+                events,
+                ..Default::default()
+            };
+            let mut frame = |input: RawInput, hit: &mut Hit| {
+                let mut out = ctx.run_ui(input, |ui| draw(ui, hit, row_first));
+                out.textures_delta.clear();
+            };
+            let mut hit = Hit::default();
+            frame(input(vec![]), &mut hit);
+            let pos = hit.pos.expect("button position");
+            hit = Hit::default();
+            let press = |pressed| Event::PointerButton {
+                pos,
+                button: PointerButton::Primary,
+                pressed,
+                modifiers: egui::Modifiers::default(),
+            };
+            frame(
+                input(vec![Event::PointerMoved(pos), press(true), press(false)]),
+                &mut hit,
+            );
+            hit
+        };
+
+        let good = click_position(true);
+        assert!(good.up && !good.row, "row first: the button wins");
+
+        let bad = click_position(false);
+        assert!(
+            bad.row && !bad.up,
+            "buttons first: the row swallows the click (old behaviour)"
+        );
+    }
+
+    #[test]
+    fn a_clickable_row_leaves_the_clicks_to_its_buttons() {
+        // The zone row is one big click target (select) with buttons on top
+        // (up / down / delete). egui gives a click to the widget that was added
+        // last, so the row must be registered *before* the buttons - this test
+        // proves that order, with the same construction as `zones_tab`.
+        use egui::{Event, PointerButton, RawInput};
+
+        #[derive(Default)]
+        struct Hit {
+            row: bool,
+            up: bool,
+            pos: Option<Pos2>,
+        }
+
+        fn draw(ui: &mut egui::Ui, hit: &mut Hit) {
+            {
+                let resp = egui::Frame::new()
+                    .inner_margin(egui::Margin::symmetric(10, 6))
+                    .show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.label("Oben");
+                            ui.add_space(92.0);
+                        });
+                    })
+                    .response;
+                let click = ui.interact(resp.rect, ui.scope_id().with("row"), Sense::click());
+                if click.clicked() {
+                    hit.row = true;
+                }
+                let bar = Rect::from_min_max(
+                    Pos2::new(resp.rect.right() - 100.0, resp.rect.top() + 3.0),
+                    Pos2::new(resp.rect.right() - 8.0, resp.rect.bottom() - 3.0),
+                );
+                let mut bar = ui.new_child(
+                    egui::UiBuilder::new()
+                        .max_rect(bar)
+                        .layout(egui::Layout::right_to_left(egui::Align::Center)),
+                );
+                let up = bar.add(egui::Button::new("^"));
+                if up.clicked() {
+                    hit.up = true;
+                }
+                hit.pos = Some(up.rect.center());
+            }
+        }
+
+        let ctx = egui::Context::default();
+        let screen = Rect::from_min_size(Pos2::ZERO, Vec2::new(400.0, 200.0));
+        let input = |events: Vec<Event>| RawInput {
+            screen_rect: Some(screen),
+            events,
+            ..Default::default()
+        };
+        // egui hands out font/texture deltas that a real backend would upload;
+        // without a backend they have to be consumed, or epaint panics on drop
+        let mut frame = |ctx: &egui::Context, input: RawInput, hit: &mut Hit| {
+            let mut out = ctx.run_ui(input, |ui| draw(ui, hit));
+            out.textures_delta.clear();
+        };
+
+        // first frame: lay the widgets out so egui knows where they are
+        let mut hit = Hit::default();
+        frame(&ctx, input(vec![]), &mut hit);
+        let pos = hit.pos.expect("the button must have a position");
+        hit = Hit::default();
+
+        // second frame: press and release right on the button
+        let press = |pressed| Event::PointerButton {
+            pos,
+            button: PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::default(),
+        };
+        frame(
+            &ctx,
+            input(vec![Event::PointerMoved(pos), press(true), press(false)]),
+            &mut hit,
+        );
+
+        assert!(hit.up, "the button must get the click, not the row");
+        assert!(!hit.row, "the row must not steal the button's click");
     }
 
     #[test]
