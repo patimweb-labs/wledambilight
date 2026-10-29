@@ -591,6 +591,81 @@ mod tests {
         v.iter().map(|c| c[channel] as f32).sum::<f32>() / v.len() as f32
     }
 
+    /// A full-saturation rainbow across the width: every column its own hue.
+    fn rainbow(w: u32, h: u32, seq: u64) -> SharedFrame {
+        let mut data = Vec::with_capacity((w * h * 3) as usize);
+        for _y in 0..h {
+            for x in 0..w {
+                let hue = x as f32 / w as f32 * 6.0;
+                let i = hue.floor() as i32;
+                let f = hue - i as f32;
+                let q = 255.0 * (1.0 - f);
+                let t = 255.0 * f;
+                let c = match i.rem_euclid(6) {
+                    0 => [255.0, t, 0.0],
+                    1 => [q, 255.0, 0.0],
+                    2 => [0.0, 255.0, t],
+                    3 => [0.0, q, 255.0],
+                    4 => [t, 0.0, 255.0],
+                    _ => [255.0, 0.0, q],
+                };
+                data.extend_from_slice(&[c[0] as u8, c[1] as u8, c[2] as u8]);
+            }
+        }
+        SharedFrame {
+            w,
+            h,
+            data: Arc::new(data),
+            seq,
+        }
+    }
+
+    /// HSV saturation of an arriving colour, 0..1.
+    fn saturation(c: [u8; 3]) -> f32 {
+        let max = c[0].max(c[1]).max(c[2]) as f32;
+        let min = c[0].min(c[1]).min(c[2]) as f32;
+        if max <= 0.0 {
+            0.0
+        } else {
+            (max - min) / max
+        }
+    }
+
+    #[test]
+    fn a_rainbow_survives_the_pipeline_with_its_colours() {
+        // The pipeline must not wash out what it reads: averaging, the spatial
+        // blend, smoothing and the grading may shift brightness, but a fully
+        // saturated rainbow has to arrive saturated.
+        for spatial in [0.0f32, 0.5, 0.6] {
+            let mut cfg = setup(120);
+            cfg.settings.smoothing_ms = 120.0;
+            cfg.settings.spatial = spatial;
+            cfg.settings.slew = 900.0;
+            let mut e = Engine::new(&cfg, 120, 68);
+            // let the smoothing settle, then look at the frame
+            for seq in 1..=12 {
+                e.tick(&cfg, Some(&rainbow(120, 68, seq)), 0.02);
+            }
+            let out = &e.last[0];
+            assert_eq!(out.len(), 120);
+            let mean: f32 = out.iter().map(|c| saturation(*c)).sum::<f32>() / out.len() as f32;
+            eprintln!(
+                "spatial {spatial:.1}: mittlere Sättigung {mean:.3}, hellster Kanal {}",
+                out.iter().map(|c| *c.iter().max().unwrap()).max().unwrap()
+            );
+            assert!(
+                mean > 0.8,
+                "spatial {spatial}: the LEDs arrive washed out (mean saturation {mean:.2})"
+            );
+            // and the brightness is not silently cut in half
+            let brightest = out.iter().map(|c| *c.iter().max().unwrap()).max().unwrap();
+            assert!(
+                brightest > 230,
+                "spatial {spatial}: no LED is bright ({brightest})"
+            );
+        }
+    }
+
     #[test]
     fn a_pinned_led_block_lands_on_exactly_those_leds() {
         let mut strip = FakeStrip::new(120);

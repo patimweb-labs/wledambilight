@@ -131,13 +131,15 @@ pub fn run(opts: CaptureOptions, h: Handles) {
     let mut fh = frame_height(width, sw, sh);
     let mut child = match spawn_gst(raw, stream.node, width, fh) {
         Ok(c) => c,
-        Err(e) => return h.fail(format!(
+        Err(e) => {
+            return h.fail(format!(
             "{}: {e}",
             tr(
                 "gst-launch-1.0 nicht gefunden – bitte GStreamer + PipeWire-Plugin installieren",
                 "gst-launch-1.0 not found – please install GStreamer and its PipeWire plugin"
             )
-        )),
+        ))
+        }
     };
     let Some(mut stdout) = child.stdout.take() else {
         return h.fail("no gst stdout");
