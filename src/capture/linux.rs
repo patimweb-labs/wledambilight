@@ -79,8 +79,35 @@ pub fn monitors() -> Vec<String> {
     Vec::new()
 }
 
+/// Start `gst-launch-1.0` on the portal's PipeWire node. Only this process
+/// depends on the frame size, so a new resolution restarts it and nothing else.
+fn spawn_gst(fd: i32, node: u32, width: u32, height: u32) -> std::io::Result<Child> {
+    let pipeline = format!(
+        "pipewiresrc fd=3 path={node} do-timestamp=true ! videoconvert ! videoscale ! video/x-raw,format=RGB,width={width},height={height} ! fdsink fd=1"
+    );
+    let mut cmd = Command::new("gst-launch-1.0");
+    cmd.arg("-q");
+    for tok in pipeline.split_whitespace() {
+        cmd.arg(tok);
+    }
+    cmd.stdout(Stdio::piped()).stderr(Stdio::null());
+    unsafe {
+        use std::os::unix::process::CommandExt;
+        cmd.pre_exec(move || {
+            // die with the parent instead of lingering as an orphan
+            libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL);
+            if fd != 3 && libc::dup2(fd, 3) < 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            let flags = libc::fcntl(3, libc::F_GETFD);
+            libc::fcntl(3, libc::F_SETFD, flags & !libc::FD_CLOEXEC);
+            Ok(())
+        });
+    }
+    cmd.spawn()
+}
+
 pub fn run(opts: CaptureOptions, h: Handles) {
-    let width = opts.width;
     h.set_status(CaptureStatus::Starting);
     let rt = match tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -98,54 +125,57 @@ pub fn run(opts: CaptureOptions, h: Handles) {
     }
     let (sw, sh) = (stream.size.0.max(0) as u32, stream.size.1.max(0) as u32);
     h.set_screen(sw, sh);
-    let fh = frame_height(width, sw, sh);
 
-    let pipeline = format!(
-        "pipewiresrc fd=3 path={} do-timestamp=true ! videoconvert ! videoscale ! video/x-raw,format=RGB,width={},height={} ! fdsink fd=1",
-        stream.node, width, fh
-    );
     let raw = stream.fd.as_raw_fd();
-    let mut cmd = Command::new("gst-launch-1.0");
-    cmd.arg("-q");
-    for tok in pipeline.split_whitespace() {
-        cmd.arg(tok);
-    }
-    cmd.stdout(Stdio::piped()).stderr(Stdio::null());
-    unsafe {
-        use std::os::unix::process::CommandExt;
-        cmd.pre_exec(move || {
-            // die with the parent instead of lingering as an orphan
-            libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL);
-            if raw != 3 && libc::dup2(raw, 3) < 0 {
-                return Err(std::io::Error::last_os_error());
-            }
-            let flags = libc::fcntl(3, libc::F_GETFD);
-            libc::fcntl(3, libc::F_SETFD, flags & !libc::FD_CLOEXEC);
-            Ok(())
-        });
-    }
-    let mut child: Child = match cmd.spawn() {
+    let mut width = h.width().max(2);
+    let mut fh = frame_height(width, sw, sh);
+    let mut child = match spawn_gst(raw, stream.node, width, fh) {
         Ok(c) => c,
-        Err(e) => {
-            return h.fail(format!(
+        Err(e) => return h.fail(format!(
             "{}: {e}",
             tr(
                 "gst-launch-1.0 nicht gefunden – bitte GStreamer + PipeWire-Plugin installieren",
                 "gst-launch-1.0 not found – please install GStreamer and its PipeWire plugin"
             )
-        ))
-        }
+        )),
     };
     let Some(mut stdout) = child.stdout.take() else {
         return h.fail("no gst stdout");
     };
-
     h.set_status(CaptureStatus::Running { w: width, h: fh });
+    let mut frame_len = (width * fh * 3) as usize;
 
-    let frame_len = (width * fh * 3) as usize;
     loop {
         if h.stopped() {
             break;
+        }
+        // a new resolution arrives as a width change: only GStreamer is rebuilt,
+        // the portal session and its PipeWire node stay alive
+        let want = h.width().max(2);
+        if want != width {
+            width = want;
+            fh = frame_height(width, sw, sh);
+            frame_len = (width * fh * 3) as usize;
+            let _ = child.kill();
+            let _ = child.wait();
+            match spawn_gst(raw, stream.node, width, fh) {
+                Ok(mut c) => match c.stdout.take() {
+                    Some(s) => {
+                        stdout = s;
+                        child = c;
+                        h.set_status(CaptureStatus::Running { w: width, h: fh });
+                    }
+                    None => {
+                        h.fail("no gst stdout");
+                        break;
+                    }
+                },
+                Err(e) => {
+                    h.fail(format!("gst-launch-1.0: {e}"));
+                    break;
+                }
+            }
+            continue;
         }
         let mut buf = vec![0u8; frame_len];
         match stdout.read_exact(&mut buf) {

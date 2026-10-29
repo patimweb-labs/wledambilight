@@ -113,12 +113,19 @@ pub fn picture(w: u32, h: u32, t: f32) -> Vec<u8> {
 pub fn run(opts: CaptureOptions, h: Handles) {
     let (sw, sh) = SCREEN;
     h.set_screen(sw, sh);
-    let w = opts.width.max(2);
-    let fh = frame_height(w, sw, sh);
+    let mut w = opts.width.max(2);
+    let mut fh = frame_height(w, sw, sh);
     h.set_status(CaptureStatus::Running { w, h: fh });
     let start = Instant::now();
     let frame_time = Duration::from_secs_f32(1.0 / opts.fps.clamp(1, 120) as f32);
     while !h.stopped() {
+        // a new resolution arrives as a width change, no restart needed
+        let want = h.width().max(2);
+        if want != w {
+            w = want;
+            fh = frame_height(w, sw, sh);
+            h.set_status(CaptureStatus::Running { w, h: fh });
+        }
         let t = start.elapsed().as_secs_f32();
         h.publish(w, fh, picture(w, fh, t));
         std::thread::sleep(frame_time);
@@ -224,6 +231,35 @@ mod tests {
             .max()
             .unwrap();
         assert!(diff > 100, "quarter {left:?} vs three quarters {right:?}");
+    }
+
+    #[test]
+    fn a_new_resolution_arrives_without_a_restart() {
+        let cap = super::super::ScreenCapture::start(CaptureOptions {
+            width: 160,
+            fps: 30,
+            monitor: 0,
+            restore_token: None,
+            test_image: true,
+        });
+        let wait_for = |w: u32| {
+            let deadline = Instant::now() + Duration::from_secs(5);
+            while Instant::now() < deadline {
+                let f = cap.frame();
+                if f.w == w && f.h > 0 && f.data.len() == (f.w * f.h * 3) as usize {
+                    return f;
+                }
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            panic!("no frame at width {w}");
+        };
+        assert_eq!(wait_for(160).w, 160);
+        cap.set_width(320);
+        let wide = wait_for(320);
+        assert_eq!(wide.w, 320);
+        assert!(wide.data.iter().any(|b| *b != 0), "still a picture");
+        cap.set_width(160);
+        assert_eq!(wait_for(160).w, 160);
     }
 
     #[test]

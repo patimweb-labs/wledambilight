@@ -137,14 +137,22 @@ impl Pipeline {
 }
 
 /// Capture settings that need a restart of the screen capture when they change.
-/// (The Linux backend does not limit its rate, so fps changes don't count there.)
+///
+/// On Linux both the frame rate and the resolution are handled *inside* the
+/// running capture (the portal session is expensive and does not always survive
+/// being renegotiated), so neither appears here.
 fn capture_key(cfg: &Config) -> (u32, usize, u32) {
+    let width = if cfg!(target_os = "linux") {
+        0
+    } else {
+        cfg.settings.capture_width
+    };
     let fps = if cfg!(target_os = "linux") {
         0
     } else {
         cfg.settings.target_fps
     };
-    (cfg.settings.capture_width, cfg.settings.monitor, fps)
+    (width, cfg.settings.monitor, fps)
 }
 
 fn run(shared: Arc<Shared>, stop: Arc<AtomicBool>) {
@@ -221,6 +229,10 @@ fn run(shared: Arc<Shared>, stop: Arc<AtomicBool>) {
         } else {
             screen.as_ref()
         };
+        if let Some(c) = active {
+            // a new resolution is a width change for the running backend
+            c.set_width(cfg.settings.capture_width);
+        }
         let frame = active.map(|c| c.frame());
         if !test_mode {
             if let Some(c) = screen.as_ref() {

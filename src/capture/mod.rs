@@ -13,7 +13,7 @@
 //! the screen aspect) into a shared slot. The rest of the program never sees
 //! the native resolution, so zones work the same everywhere.
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 
 #[cfg(target_os = "linux")]
@@ -101,9 +101,17 @@ pub struct Handles {
     pub status: Arc<Mutex<CaptureStatus>>,
     pub restore_token: Arc<Mutex<Option<String>>>,
     pub stop: Arc<AtomicBool>,
+    /// width the backend should deliver; can change while it runs, so a new
+    /// resolution does not cost a new portal session
+    width: Arc<AtomicU32>,
 }
 
 impl Handles {
+    /// Width the backend should deliver right now.
+    pub fn width(&self) -> u32 {
+        self.width.load(Ordering::Relaxed)
+    }
+
     pub fn set_status(&self, s: CaptureStatus) {
         *self.status.lock().unwrap() = s;
     }
@@ -169,6 +177,7 @@ impl ScreenCapture {
             status: Arc::new(Mutex::new(CaptureStatus::Starting)),
             restore_token: Arc::new(Mutex::new(opts.restore_token.clone())),
             stop: Arc::new(AtomicBool::new(false)),
+            width: Arc::new(AtomicU32::new(opts.width)),
         };
         let h = handles.clone();
         let join = std::thread::Builder::new()
@@ -203,6 +212,15 @@ impl ScreenCapture {
 
     pub fn status(&self) -> CaptureStatus {
         self.handles.status.lock().unwrap().clone()
+    }
+
+    /// Ask for another frame width. The backend picks it up on its next frame,
+    /// so changing the resolution in the app costs no new portal session.
+    pub fn set_width(&self, width: u32) {
+        let width = width.clamp(64, 3840);
+        if width != self.handles.width() {
+            self.handles.width.store(width, Ordering::Relaxed);
+        }
     }
 
     pub fn frame(&self) -> SharedFrame {
