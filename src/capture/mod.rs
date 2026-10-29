@@ -89,6 +89,8 @@ pub struct CaptureOptions {
     pub monitor: usize,
     /// Linux: portal restore token
     pub restore_token: Option<String>,
+    /// show the test picture instead of the screen (no permission needed)
+    pub test_image: bool,
 }
 
 /// Everything a backend writes to. Cheap to clone, shared with the owner.
@@ -155,7 +157,7 @@ impl Drop for ScreenCapture {
 }
 
 impl ScreenCapture {
-    /// Spawn the capture thread for the current platform.
+    /// Spawn the capture thread for the current platform (or the test picture).
     pub fn start(mut opts: CaptureOptions) -> Self {
         opts.width = opts.width.clamp(64, 3840);
         let handles = Handles {
@@ -172,7 +174,7 @@ impl ScreenCapture {
         let join = std::thread::Builder::new()
             .name("capture".into())
             .spawn(move || {
-                if demo::enabled() {
+                if opts.test_image || demo::enabled() {
                     demo::run(opts, h)
                 } else {
                     platform::run(opts, h)
@@ -202,10 +204,10 @@ impl ScreenCapture {
     }
 }
 
-/// True in demo mode (`AMBILIGHT_DEMO=1`): nothing is captured, so the preview
-/// can never feed back into the LEDs.
-pub fn demo_mode() -> bool {
-    demo::enabled()
+/// True when the test picture runs instead of the screen: the setting in the
+/// app, or `AMBILIGHT_DEMO=1` from the environment.
+pub fn test_picture(setting: bool) -> bool {
+    setting || demo::enabled()
 }
 
 /// Monitors the user can choose from (empty on Linux, where the portal asks).

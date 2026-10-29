@@ -138,18 +138,23 @@ impl Pipeline {
 
 /// Capture settings that need a restart of the capture when they change.
 /// (The Linux backend does not limit its rate, so fps changes don't count there.)
-fn capture_key(cfg: &Config) -> (u32, usize, u32) {
+fn capture_key(cfg: &Config) -> (u32, usize, u32, bool) {
     let fps = if cfg!(target_os = "linux") {
         0
     } else {
         cfg.settings.target_fps
     };
-    (cfg.settings.capture_width, cfg.settings.monitor, fps)
+    (
+        cfg.settings.capture_width,
+        cfg.settings.monitor,
+        fps,
+        cfg.settings.test_image,
+    )
 }
 
 fn run(shared: Arc<Shared>, stop: Arc<AtomicBool>) {
     let mut capture: Option<ScreenCapture> = None;
-    let mut capture_cfg = (0u32, 0usize, 0u32);
+    let mut capture_cfg = (0u32, 0usize, 0u32, false);
     let mut restart_seen = 0u64;
     let mut cfg = shared.config();
     let mut cfg_seen = shared.cfg_version.load(Ordering::Acquire);
@@ -190,6 +195,7 @@ fn run(shared: Arc<Shared>, stop: Arc<AtomicBool>) {
                 fps: cfg.settings.target_fps,
                 monitor: cfg.settings.monitor,
                 restore_token: cfg.settings.restore_token.clone(),
+                test_image: cfg.settings.test_image,
             }));
         }
 

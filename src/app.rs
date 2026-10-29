@@ -927,6 +927,8 @@ impl App {
                     let stats = &self.snap.stats;
                     let (text, color) = if paused {
                         (tr("Pausiert", "Paused").to_string(), theme::AMBER)
+                    } else if capture::test_picture(self.cfg.settings.test_image) {
+                        (tr("Testbild", "Test picture").to_string(), theme::AMBER)
                     } else {
                         let (t, c) = status_text(&stats.status);
                         if matches!(stats.status, CaptureStatus::Running { .. })
@@ -2276,16 +2278,44 @@ impl App {
         theme::title(ui, tr("Aufnahme", "Capture"));
         ui.add_space(4.0);
         theme::card(ui, |ui| {
-            if capture::HAS_MONITOR_CHOICE && !monitors.is_empty() {
-                ui.horizontal(|ui| {
-                    theme::field_label(ui, tr("Monitor", "Display"));
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        let opts: Vec<usize> = (0..monitors.len()).collect();
-                        let mut m = st.monitor.min(monitors.len() - 1);
-                        theme::combo(ui, "monitor", 170.0, &mut m, |i| monitors[i].clone(), &opts);
-                        st.monitor = m;
+            // the test picture first: it is the way to check the LEDs without
+            // handing out the screen, and it works before any permission dialog
+            theme::switch(
+                ui,
+                &mut st.test_image,
+                tr("Testbild statt Bildschirm", "Test picture instead of the screen"),
+            )
+            .on_hover_text(tr(
+                "Zeigt ein Testbild statt des Bildschirms: Regenbogen von links nach rechts, weiße Leiste, weißer Rahmen. Kein Bildschirmzugriff, keine Freigabe nötig – zum Prüfen von Zonen, Richtung und Farben.",
+                "Shows a test picture instead of the screen: a rainbow running left to right, a white bar and frame. No screen access, no permission – for checking zones, direction and colours.",
+            ));
+            theme::hint(
+                ui,
+                tr(
+                    "Zum Ausprobieren: die LEDs zeigen das Testbild, nicht den Bildschirm.",
+                    "To try out: the LEDs show the test picture, not the screen.",
+                ),
+            );
+            ui.add_space(6.0);
+            if !st.test_image {
+                if capture::HAS_MONITOR_CHOICE && !monitors.is_empty() {
+                    ui.horizontal(|ui| {
+                        theme::field_label(ui, tr("Monitor", "Display"));
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            let opts: Vec<usize> = (0..monitors.len()).collect();
+                            let mut m = st.monitor.min(monitors.len() - 1);
+                            theme::combo(
+                                ui,
+                                "monitor",
+                                170.0,
+                                &mut m,
+                                |i| monitors[i].clone(),
+                                &opts,
+                            );
+                            st.monitor = m;
+                        });
                     });
-                });
+                }
             }
             ui.horizontal(|ui| {
                 theme::field_label(ui, tr("Auflösung", "Resolution"));
@@ -2315,7 +2345,7 @@ impl App {
                     "Higher = finer zones at a little more CPU. 320 is usually enough.",
                 ),
             );
-            if !capture::EXCLUDES_OWN_WINDOW {
+            if !capture::EXCLUDES_OWN_WINDOW && !st.test_image {
                 ui.add_space(4.0);
                 theme::switch(
                     ui,
@@ -2330,7 +2360,7 @@ impl App {
                     "Prevents the window from capturing itself",
                 ));
             }
-            if cfg!(target_os = "linux") {
+            if cfg!(target_os = "linux") && !st.test_image {
                 ui.add_space(4.0);
                 if ui
                     .button(tr("Anderen Monitor wählen", "Choose another display"))
@@ -2412,6 +2442,19 @@ impl App {
             );
         });
         if self.cfg.settings != before {
+            if self.cfg.settings.test_image != before.test_image {
+                self.notify(if self.cfg.settings.test_image {
+                    tr(
+                        "Testbild an – die LEDs folgen dem Testbild statt dem Bildschirm",
+                        "Test picture on – the LEDs follow the test picture, not the screen",
+                    )
+                } else {
+                    tr(
+                        "Testbild aus – die LEDs folgen wieder dem Bildschirm",
+                        "Test picture off – the LEDs follow the screen again",
+                    )
+                });
+            }
             if self.cfg.settings.restore_token.is_none() && before.restore_token.is_some() {
                 // Linux: forget the token and ask the portal again
                 self.shared.set_config(&self.cfg);
@@ -2614,13 +2657,28 @@ impl App {
                     );
                     ui.label(RichText::new(e).size(12.0).color(theme::INK_DIM));
                     ui.add_space(4.0);
-                    if icons::labelled(
-                        ui,
-                        Icon::Refresh,
-                        tr("Erneut versuchen", "Try again"),
-                        Kind::Primary,
-                    ) {
-                        self.shared.request_restart();
+                    let mut use_test = false;
+                    ui.horizontal(|ui| {
+                        if icons::labelled(
+                            ui,
+                            Icon::Refresh,
+                            tr("Erneut versuchen", "Try again"),
+                            Kind::Primary,
+                        ) {
+                            self.shared.request_restart();
+                        }
+                        if icons::labelled(
+                            ui,
+                            Icon::Grid,
+                            tr("Testbild zeigen", "Show the test picture"),
+                            Kind::Secondary,
+                        ) {
+                            use_test = true;
+                        }
+                    });
+                    if use_test {
+                        self.cfg.settings.test_image = true;
+                        self.changed();
                     }
                 });
             }
@@ -2913,11 +2971,16 @@ impl eframe::App for App {
     fn ui(&mut self, root: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = &root.ctx().clone();
         let focused = ctx.input(|i| i.focused);
+        // the test picture is generated here, no capture to feed back into the LEDs
+        let test_picture = capture::test_picture(self.cfg.settings.test_image);
         // Linux: freeze what the window shows while it is in the background
-        let live = capture::EXCLUDES_OWN_WINDOW || focused || capture::demo_mode();
+        let live = capture::EXCLUDES_OWN_WINDOW || focused || test_picture;
         let manual = self.tray_state.manual_pause.load(Ordering::Relaxed);
         let want_pause = manual
-            || (!capture::EXCLUDES_OWN_WINDOW && self.cfg.settings.pause_when_focused && focused);
+            || (!capture::EXCLUDES_OWN_WINDOW
+                && !test_picture
+                && self.cfg.settings.pause_when_focused
+                && focused);
         self.shared.paused.store(want_pause, Ordering::Relaxed);
 
         // a frozen window still needs one picture after startup

@@ -37,6 +37,10 @@ entirely in your local network: no account, no cloud.
 - **Colour controls** – brightness (global and per device), gamma, saturation,
   per-zone gain, reversed strips and BGR clones.
 - **Frame rate** 24–144 fps globally, plus a cap per device.
+- **Test picture** – instead of the screen, a rainbow running left → right
+  with a white bar, a white frame and a centre cross: check zones, direction
+  and colours without handing out the screen. Switch on the *App* tab (“Test picture
+  instead of the screen”) or `AMBILIGHT_DEMO=1`.
 - **Live view** – the preview shows the light each zone throws onto the wall,
   a ruler with the colour of every LED, and the exact output per device.
 - **Background operation** – tray / menu bar icon, close-to-tray,

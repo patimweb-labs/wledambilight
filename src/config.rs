@@ -208,6 +208,9 @@ pub struct Settings {
     pub brightness: f32,
     /// Linux only: portal restore token so the capture starts without a dialog
     pub restore_token: Option<String>,
+    /// show the built-in test picture instead of the screen: no capture
+    /// permission needed, and a good way to check the strip and the zones
+    pub test_image: bool,
     pub snap: bool,
     /// Windows/macOS: index of the captured monitor (0 = primary)
     pub monitor: usize,
@@ -228,6 +231,7 @@ impl Default for Settings {
             saturation: 1.0,
             brightness: 1.0,
             restore_token: None,
+            test_image: false,
             snap: true,
             monitor: 0,
             language: "auto".into(),
