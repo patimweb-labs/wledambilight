@@ -2527,13 +2527,14 @@ impl App {
     }
 
     fn output_bar(&mut self, root: &mut egui::Ui) {
-        let devices: Vec<(usize, String, bool)> = self
+        // (config index, name, BGR, reverse)
+        let devices: Vec<(usize, String, bool, bool)> = self
             .cfg
             .devices
             .iter()
             .enumerate()
             .filter(|(_, d)| d.enabled)
-            .map(|(i, d)| (i, d.name.clone(), d.bgr))
+            .map(|(i, d)| (i, d.name.clone(), d.bgr, d.reverse))
             .collect();
         // header + up to four tape rows (the rest scrolls), plus margins
         let rows = devices.len();
@@ -2585,7 +2586,7 @@ impl App {
                         // compact rows: egui would make every row 28 px high
                         ui.spacing_mut().interact_size.y = row_h;
                         ui.spacing_mut().item_spacing.y = 6.0;
-                        for (i, name, bgr) in devices {
+                        for (i, name, bgr, reverse) in devices {
                             ui.horizontal(|ui| {
                                 let (r, _) =
                                     ui.allocate_exact_size(Vec2::new(130.0, row_h), Sense::hover());
@@ -2596,11 +2597,28 @@ impl App {
                                     theme::regular(12.0),
                                     theme::INK_DIM,
                                 );
+                                // the wire carries the colours in device order;
+                                // the tape shows them as the strip lies, so a
+                                // reversed strip is visible as such
                                 let mut colors = self.snap.last.get(i).cloned().unwrap_or_default();
+                                if reverse {
+                                    colors.reverse();
+                                }
                                 if bgr {
                                     colors.iter_mut().for_each(|c| c.swap(0, 2));
                                 }
-                                theme::led_tape(ui, &colors, row_h);
+                                theme::led_tape(ui, &colors, row_h, reverse)
+                                    .on_hover_text(if reverse {
+                                        tr(
+                                            "So liegt der Streifen: LED 0 ist am rechten Ende (Reihenfolge umgekehrt)",
+                                            "The strip as it lies: LED 0 is at the right end (order reversed)",
+                                        )
+                                    } else {
+                                        tr(
+                                            "So liegt der Streifen: LED 0 ist am linken Ende",
+                                            "The strip as it lies: LED 0 is at the left end",
+                                        )
+                                    });
                             });
                         }
                     });

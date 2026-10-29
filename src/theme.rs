@@ -451,13 +451,41 @@ pub fn usage_bar(ui: &mut Ui, used: f32, total: f32) {
 }
 
 /// The LED tape: one segment per LED, in the colour that is being sent.
-pub fn led_tape(ui: &mut Ui, colors: &[[u8; 3]], height: f32) {
+pub fn led_tape(ui: &mut Ui, colors: &[[u8; 3]], height: f32, zero_right: bool) -> Response {
     let width = ui.available_width();
-    let (rect, _) = ui.allocate_exact_size(Vec2::new(width, height), Sense::hover());
+    let (rect, resp) = ui.allocate_exact_size(Vec2::new(width, height), Sense::hover());
     let painter = ui.painter_at(rect);
     painter.rect_filled(rect, CornerRadius::same(R_SM), MATTE);
+    // a small tag at the end where LED 0 sits: the only thing that shows the
+    // wiring direction, because the colours themselves are always in picture
+    // order
+    let tag = 13.0_f32.min(rect.width() * 0.15);
+    let tag_rect = if zero_right {
+        Rect::from_min_max(
+            Pos2::new(rect.right() - 2.0 - tag, rect.top() + 2.0),
+            Pos2::new(rect.right() - 2.0, rect.bottom() - 2.0),
+        )
+    } else {
+        Rect::from_min_max(
+            Pos2::new(rect.left() + 2.0, rect.top() + 2.0),
+            Pos2::new(rect.left() + 2.0 + tag, rect.bottom() - 2.0),
+        )
+    };
+    painter.rect_filled(tag_rect, CornerRadius::same(2), MATTE);
+    painter.text(
+        tag_rect.center(),
+        egui::Align2::CENTER_CENTER,
+        "0",
+        regular(9.5),
+        INK,
+    );
     if !colors.is_empty() {
-        let inner = rect.shrink(2.0);
+        let mut inner = rect.shrink(2.0);
+        if zero_right {
+            inner.max.x -= tag + 2.0;
+        } else {
+            inner.min.x += tag + 2.0;
+        }
         let n = colors.len() as f32;
         let seg = inner.width() / n;
         let gap = if seg > 3.0 { 1.0 } else { 0.0 };
@@ -480,6 +508,7 @@ pub fn led_tape(ui: &mut Ui, colors: &[[u8; 3]], height: f32) {
         Stroke::new(1.0_f32, LINE),
         egui::StrokeKind::Inside,
     );
+    resp
 }
 
 /// Label chip used for zone names on the canvas.
