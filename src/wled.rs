@@ -181,15 +181,31 @@ pub fn probe_in_background(host: String) -> Arc<Mutex<Option<Result<WledInfo, St
     out
 }
 
-pub struct DdpSender {
+struct DdpSender {
     sock: UdpSocket,
     seq: u8,
 }
 
+/// UDP target for a device address. `host` may carry its own port
+/// (`192.168.0.5:4048`), which the tests and NAT setups use.
+fn udp_target(host: &str, default_port: u16) -> Option<SocketAddr> {
+    let host = host.trim();
+    if let Ok(addr) = host.parse::<SocketAddr>() {
+        return Some(addr);
+    }
+    if let Ok(ip) = host.parse::<IpAddr>() {
+        return Some(SocketAddr::new(ip, default_port));
+    }
+    let mut addr = host.to_socket_addrs().ok()?.next()?;
+    if addr.port() == 0 {
+        addr.set_port(default_port);
+    }
+    Some(addr)
+}
+
 impl DdpSender {
     pub fn new(host: &str) -> Option<Self> {
-        let addr = (host, 4048u16).to_socket_addrs().ok()?.next()?;
-        Self::connect_to(addr)
+        Self::connect_to(udp_target(host, 4048)?)
     }
 
     /// Sender for an explicit address (the tests use a local port).
@@ -233,7 +249,7 @@ pub struct DrgbSender {
 
 impl DrgbSender {
     pub fn new(host: &str) -> Option<Self> {
-        let addr = (host, 21324u16).to_socket_addrs().ok()?.next()?;
+        let addr = udp_target(host, 21324)?;
         let sock = UdpSocket::bind("0.0.0.0:0").ok()?;
         sock.connect(addr).ok()?;
         sock.set_nonblocking(true).ok()?;

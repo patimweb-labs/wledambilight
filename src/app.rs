@@ -387,14 +387,28 @@ impl App {
     }
 
     /// The LED count of a device changed (segments, pairing): a zone that
-    /// covered the whole device keeps covering it.
+    /// covered the whole device keeps covering it, nothing else keeps a block
+    /// that no longer exists.
     fn resize_device(&mut self, id: &str, old: u16, new: u16) {
+        let new = new.max(1);
         let zones: Vec<usize> = (0..self.cfg.zones.len())
             .filter(|i| self.cfg.zones[*i].device == id)
             .collect();
         if let [only] = zones[..] {
             if self.cfg.zones[only].count == old {
-                self.cfg.zones[only].count = new.max(1);
+                self.cfg.zones[only].count = new;
+            }
+        }
+        for i in zones {
+            let z = &mut self.cfg.zones[i];
+            if z.count > new {
+                z.count = new;
+            }
+            if z.offset
+                .is_some_and(|o| o as u32 + z.count as u32 > new as u32)
+            {
+                // the pinned block no longer fits: let the zone pack again
+                z.offset = None;
             }
         }
     }
@@ -425,15 +439,39 @@ impl App {
         let free = dev
             .led_count
             .saturating_sub(self.cfg.used_leds(&device, None));
-        let count = if free > 0 {
-            free
-        } else {
-            (dev.led_count / 4).max(1)
-        };
-        let mut zone = Zone::preset(ZonePreset::Top, device, count, self.next_zone_color());
+        if free == 0 {
+            self.notify(if i18n::is_de() {
+                format!(
+                    "Alle {} {} von {} sind belegt – eine Zone verkleinern oder löschen",
+                    dev.led_count,
+                    unit(dev.kind),
+                    dev.name
+                )
+            } else {
+                format!(
+                    "All {} {} of {} are taken – shrink or delete a zone",
+                    dev.led_count,
+                    unit(dev.kind),
+                    dev.name
+                )
+            });
+            return;
+        }
+        let count = free;
+        let mut zone = Zone::preset(
+            ZonePreset::Top,
+            device.clone(),
+            count,
+            self.next_zone_color(),
+        );
         zone.name = format!("Zone {}", self.cfg.zones.len() + 1);
         zone.y = 0.35;
         zone.h = 0.3;
+        // put it into the first free gap instead of behind the last zone,
+        // which could be pinned far up the strip
+        if let Some(start) = self.cfg.free_start(&device, count) {
+            zone.offset = Some(start);
+        }
         self.cfg.zones.push(zone);
         self.selected = Some(self.cfg.zones.len() - 1);
         self.changed();
@@ -515,32 +553,43 @@ impl App {
         self.changed();
     }
 
-    /// Turn the selected zone's device into four edge zones, LED count shared
-    /// out by edge length.
+    /// Turn the selected zone into four edge zones (top, right, bottom, left)
+    /// and share its LEDs out by edge length. The logic lives in
+    /// [`Config::split_zone_into_edges`]; here it only gets its names and
+    /// colours and the notice.
     fn split_into_edges(&mut self) {
-        let Some(idx) = self.selected else {
+        let Some(idx) = self.selected.filter(|i| *i < self.cfg.zones.len()) else {
             self.notify(tr(
                 "Erst die Zone auswählen, die aufgeteilt werden soll",
                 "Select the zone to split first",
             ));
             return;
         };
-        let Some(zone) = self.cfg.zones.get(idx).cloned() else {
-            return;
-        };
-        let Some(dev) = self.cfg.device(&zone.device).cloned() else {
-            return;
-        };
-        let (cw, ch) = self.capture_dims();
-        let counts = split_counts(dev.led_count, ch as f32 / cw as f32);
-        // zones of this device are replaced, otherwise the LED ranges would clash
-        let first = self
+        let name = self.cfg.zones[idx].name.clone();
+        let kind = self
             .cfg
-            .zones
-            .iter()
-            .position(|z| z.device == dev.id)
-            .unwrap_or(idx);
-        self.cfg.zones.retain(|z| z.device != dev.id);
+            .device(&self.cfg.zones[idx].device)
+            .map(|d| d.kind)
+            .unwrap_or(DeviceKind::Wled);
+        let count = self.cfg.zones[idx].count;
+        let (cw, ch) = self.capture_dims();
+        let Some(counts) = self
+            .cfg
+            .split_zone_into_edges(idx, ch as f32 / cw.max(1) as f32)
+        else {
+            self.notify(if i18n::is_de() {
+                format!(
+                    "{name} hat nur {count} {} – für vier Kanten braucht die Zone mindestens 4",
+                    unit(kind)
+                )
+            } else {
+                format!(
+                    "{name} has only {count} {} – four edges need at least 4",
+                    unit(kind)
+                )
+            });
+            return;
+        };
         // order on the strip: top, right, bottom, left (clockwise)
         let kinds = [
             ZonePreset::Top,
@@ -548,27 +597,30 @@ impl App {
             ZonePreset::Bottom,
             ZonePreset::Left,
         ];
-        let new_zones: Vec<Zone> = kinds
-            .iter()
-            .enumerate()
-            .map(|(i, kind)| {
-                let mut z = Zone::preset(*kind, dev.id.clone(), counts[i], PALETTE[i]);
-                z.name = preset_name(*kind);
-                z
-            })
-            .collect();
-        let at = first.min(self.cfg.zones.len());
-        self.cfg.zones.splice(at..at, new_zones);
-        self.selected = Some(at);
+        for (k, preset) in kinds.iter().enumerate() {
+            if let Some(z) = self.cfg.zones.get_mut(idx + k) {
+                z.name = preset_name(*preset);
+                z.color = PALETTE[k % PALETTE.len()];
+            }
+        }
+        self.selected = Some(idx);
         self.notify(if i18n::is_de() {
             format!(
-                "{} in 4 Kanten aufgeteilt: {} / {} / {} / {} LEDs",
-                dev.name, counts[0], counts[1], counts[2], counts[3]
+                "{name} in 4 Kanten aufgeteilt: {} / {} / {} / {} {}",
+                counts[0],
+                counts[1],
+                counts[2],
+                counts[3],
+                unit(kind)
             )
         } else {
             format!(
-                "{} split into 4 edges: {} / {} / {} / {} LEDs",
-                dev.name, counts[0], counts[1], counts[2], counts[3]
+                "{name} split into 4 edges: {} / {} / {} / {} {}",
+                counts[0],
+                counts[1],
+                counts[2],
+                counts[3],
+                unit(kind)
             )
         });
         self.changed();
@@ -736,35 +788,13 @@ impl App {
     }
 }
 
-/// Share `total` LEDs over top, right, bottom, left by edge length.
-fn split_counts(total: u16, ratio: f32) -> [u16; 4] {
-    let lens = [1.0f32, ratio, 1.0, ratio];
-    let sum: f32 = lens.iter().sum();
-    let t = total as f32;
-    let mut counts = lens.map(|l| (l / sum * t).floor().max(1.0) as u16);
-    let mut diff = total as i32 - counts.iter().map(|c| *c as i32).sum::<i32>();
-    while diff > 0 {
-        let best = (0..4)
-            .max_by(|a, b| {
-                let ra = lens[*a] / sum * t - counts[*a] as f32;
-                let rb = lens[*b] / sum * t - counts[*b] as f32;
-                ra.total_cmp(&rb)
-            })
-            .unwrap_or(0);
-        counts[best] += 1;
-        diff -= 1;
-    }
-    while diff < 0 {
-        let Some(i) = (0..4).max_by_key(|i| counts[*i]) else {
-            break;
-        };
-        if counts[i] <= 1 {
-            break;
-        }
-        counts[i] -= 1;
-        diff += 1;
-    }
-    counts
+/// Where a zone's LED block starts after the user shifts it by `delta`.
+/// `current` is the pinned start (`None` while the zone packs automatically),
+/// `auto` where automatic packing would put it, `last` the highest start that
+/// still keeps the whole block on the device.
+fn shifted_start(current: Option<u16>, auto: u32, delta: i32, last: u32) -> u16 {
+    let from = current.map(u32::from).unwrap_or(auto) as i32;
+    (from + delta).clamp(0, last as i32) as u16
 }
 
 // ------------------------------------------------------------------ canvas helpers
@@ -1013,6 +1043,14 @@ impl App {
     }
 
     fn device_cards(&mut self, ui: &mut egui::Ui) {
+        // the usage must be measured before the device list is taken apart,
+        // otherwise the device is gone while its own card is drawn
+        let usages: std::collections::HashMap<String, crate::config::DeviceUsage> = self
+            .cfg
+            .devices
+            .iter()
+            .map(|d| (d.id.clone(), self.cfg.device_usage(&d.id)))
+            .collect();
         let mut devices = std::mem::take(&mut self.cfg.devices);
         let mut remove: Option<usize> = None;
         let mut resized: Vec<(String, u16, u16)> = Vec::new();
@@ -1021,7 +1059,8 @@ impl App {
         let statuses = self.snap.stats.devices.clone();
         let pairing_id = self.pairing.as_ref().map(|p| p.0.clone());
         for (i, dev) in devices.iter_mut().enumerate() {
-            let used = self.cfg.used_leds(&dev.id, None);
+            let usage = usages.get(&dev.id).copied().unwrap_or_default();
+            let used = usage.used;
             let open = self.expanded.contains(&dev.id);
             let before = dev.clone();
             let unpaired = dev.kind == DeviceKind::Nanoleaf && dev.token.is_none();
@@ -1079,7 +1118,7 @@ impl App {
                                 format!("{used} / {} {} used", dev.led_count, unit(dev.kind))
                             };
                             ui.label(RichText::new(txt).size(11.5).color(
-                                if used > dev.led_count || unpaired {
+                                if usage.problem || unpaired {
                                     theme::CORAL
                                 } else {
                                     theme::INK_DIM
@@ -1102,12 +1141,12 @@ impl App {
                         };
                         ui.label(RichText::new(txt).size(11.5).color(col));
                     }
-                    if used > dev.led_count && !unpaired {
+                    if usage.problem && !unpaired {
                         theme::hint(
                             ui,
                             tr(
-                                "Die Zonen brauchen mehr LEDs, als das Gerät hat.",
-                                "The zones need more LEDs than the device has.",
+                                "Die Zonen überlappen sich oder reichen über das Ende des Geräts hinaus – die LED-Bereiche im Reiter „Zonen“ prüfen.",
+                                "Zones overlap or reach past the end of the device – check the LED ranges on the “Zones” tab.",
                             ),
                         );
                     }
@@ -1609,7 +1648,17 @@ impl App {
             let z = &self.cfg.zones[i];
             let selected = self.selected == Some(i);
             let color = Color32::from_rgb(z.color[0], z.color[1], z.color[2]);
+            let report = self.cfg.zone_report(i);
             let (lo, hi) = ranges.get(i).copied().unwrap_or((0, 0));
+            let note = match report {
+                Some(r) if r.over && r.overlap.is_some() => {
+                    tr(" · überlappt, zu lang", " · overlaps, too long")
+                }
+                Some(r) if r.over => tr(" · zu lang", " · too long"),
+                Some(r) if r.overlap.is_some() => tr(" · überlappt", " · overlaps"),
+                _ => "",
+            };
+            let bad = !note.is_empty();
             let name = z.name.clone();
             let enabled = z.enabled;
             let dev_name = self
@@ -1641,25 +1690,45 @@ impl App {
                             CornerRadius::same(2),
                             if enabled { color } else { theme::LINE_HI },
                         );
-                        ui.vertical(|ui| {
-                            ui.spacing_mut().item_spacing.y = 1.0;
-                            ui.label(RichText::new(&name).font(theme::semibold(13.0)).color(
-                                if enabled {
-                                    theme::INK
-                                } else {
-                                    theme::INK_FAINT
-                                },
-                            ));
-                            ui.label(
-                                RichText::new(format!(
-                                    "LED {}–{} · {dev_name}",
-                                    lo,
-                                    hi.saturating_sub(1)
-                                ))
-                                .size(11.5)
-                                .color(theme::INK_FAINT),
-                            );
-                        });
+                        // the text gets the width that is left after the buttons,
+                        // so a long device name never runs under them
+                        let buttons_w = if selected { 92.0 } else { 0.0 };
+                        let text_w = (ui.available_width() - buttons_w).max(80.0);
+                        ui.allocate_ui_with_layout(
+                            Vec2::new(text_w, 30.0),
+                            egui::Layout::top_down(egui::Align::LEFT),
+                            |ui| {
+                                ui.spacing_mut().item_spacing.y = 1.0;
+                                ui.add(
+                                    egui::Label::new(
+                                        RichText::new(&name).font(theme::semibold(13.0)).color(
+                                            if enabled {
+                                                theme::INK
+                                            } else {
+                                                theme::INK_FAINT
+                                            },
+                                        ),
+                                    )
+                                    .truncate(),
+                                );
+                                ui.add(
+                                    egui::Label::new(
+                                        RichText::new(format!(
+                                            "LED {}–{}{note} · {dev_name}",
+                                            lo,
+                                            hi.saturating_sub(1)
+                                        ))
+                                        .size(11.5)
+                                        .color(if bad {
+                                            theme::CORAL
+                                        } else {
+                                            theme::INK_FAINT
+                                        }),
+                                    )
+                                    .truncate(),
+                                );
+                            },
+                        );
                         if selected {
                             ui.with_layout(
                                 egui::Layout::right_to_left(egui::Align::Center),
@@ -1769,12 +1838,17 @@ impl App {
             .collect();
         let cap = self.capture_dims();
         let (sw, sh) = self.screen_size();
-        let reversed = self
-            .cfg
-            .device(&self.cfg.zones[i].device)
-            .map(|d| d.reverse)
-            .unwrap_or(false);
-        let before = self.cfg.zones[i].clone();
+        let zone = self.cfg.zones[i].clone();
+        let dev = self.cfg.device(&zone.device);
+        let leds = dev.map(|d| d.led_count.max(1)).unwrap_or(1);
+        let kind = dev.map(|d| d.kind).unwrap_or(DeviceKind::Wled);
+        let reversed = dev.map(|d| d.reverse).unwrap_or(false);
+        // where the zone would sit without a pinned LED block, and how far its
+        // block can go before it leaves the device
+        let auto_start = self.cfg.zone_start_if_auto(i);
+        let max_start = leds.saturating_sub(zone.count) as u32;
+        let device_id = zone.device.clone();
+        let before = zone.clone();
         let z = &mut self.cfg.zones[i];
         theme::card(ui, |ui| {
             theme::field_label(ui, tr("Name", "Name"));
@@ -1814,12 +1888,108 @@ impl App {
                         .add(
                             egui::DragValue::new(&mut c)
                                 .speed(1.0)
-                                .range(1..=4000)
+                                .range(1..=leds as u32)
                                 .suffix(" LEDs"),
                         )
+                        .on_hover_text(if i18n::is_de() {
+                            format!("Das Gerät hat höchstens {leds} {}", unit(kind))
+                        } else {
+                            format!("The device has at most {leds} {}", unit(kind))
+                        })
                         .changed()
                     {
                         z.count = c as u16;
+                    }
+                });
+            });
+            ui.add_space(4.0);
+            // LED block: which part of the strip this zone drives. This is what
+            // "move the LEDs" means - the block can sit anywhere on the device.
+            theme::field_label(
+                ui,
+                tr("LED-Bereich auf dem Gerät", "LED block on the device"),
+            );
+            ui.horizontal(|ui| {
+                let mut start = z.offset.map(u32::from).unwrap_or(auto_start);
+                // minus left, plus right, the number in between - the fastest
+                // way to slide the block along the strip
+                for (label, delta) in [("−10", -10i32), ("−1", -1)] {
+                    if ui
+                        .add(egui::Button::new(label).small())
+                        .on_hover_text(tr("Richtung LED 0", "Towards LED 0"))
+                        .hand_cursor()
+                        .clicked()
+                    {
+                        z.offset = Some(shifted_start(z.offset, auto_start, delta, max_start));
+                    }
+                }
+                let changed = ui
+                    .add(
+                        egui::DragValue::new(&mut start)
+                            .speed(0.5)
+                            .range(0..=max_start)
+                            .prefix("LED "),
+                    )
+                    .on_hover_text(tr(
+                        "Erste LED dieser Zone – ziehen oder tippen",
+                        "First LED of this zone – drag or type",
+                    ))
+                    .changed();
+                if changed {
+                    z.offset = Some(start.min(u16::MAX as u32) as u16);
+                }
+                for (label, delta) in [("+1", 1i32), ("+10", 10)] {
+                    if ui
+                        .add(egui::Button::new(label).small())
+                        .on_hover_text(tr("Vom Anfang weg", "Away from the start"))
+                        .hand_cursor()
+                        .clicked()
+                    {
+                        z.offset = Some(shifted_start(z.offset, auto_start, delta, max_start));
+                    }
+                }
+            });
+            let start_now = z.offset.map(u32::from).unwrap_or(auto_start);
+            let end_now = start_now + z.count.max(1) as u32;
+            let text = if i18n::is_de() {
+                format!(
+                    "LED {}–{} von {leds}{}",
+                    start_now,
+                    end_now.saturating_sub(1),
+                    if z.offset.is_some() {
+                        " · fest gesetzt"
+                    } else {
+                        " · automatisch"
+                    }
+                )
+            } else {
+                format!(
+                    "LED {}–{} of {leds}{}",
+                    start_now,
+                    end_now.saturating_sub(1),
+                    if z.offset.is_some() {
+                        " · pinned"
+                    } else {
+                        " · automatic"
+                    }
+                )
+            };
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(text).size(11.5).color(theme::INK_FAINT));
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui
+                        .add_enabled(
+                            z.offset.is_some(),
+                            egui::Button::new(tr("Auto", "Auto")).small(),
+                        )
+                        .on_hover_text(tr(
+                            "Wieder automatisch hinter die Zone davor legen",
+                            "Go back to packing behind the zone before it",
+                        ))
+                        .hand_cursor()
+                        .clicked()
+                    {
+                        z.offset = None;
                     }
                 });
             });
@@ -1924,8 +2094,74 @@ impl App {
                 |v| format!("{v:.2}×"),
             );
         });
+        // the zone must stay valid on its device: a zone that was moved to
+        // another device starts fresh there, and a block that no longer fits
+        // is pulled back onto the strip instead of silently going dark
+        let device_leds = self
+            .cfg
+            .device(&self.cfg.zones[i].device)
+            .map(|d| d.led_count.max(1))
+            .unwrap_or(1);
+        {
+            let z = &mut self.cfg.zones[i];
+            if z.device != device_id {
+                z.offset = None;
+            }
+            if z.count > device_leds {
+                z.count = device_leds;
+            }
+            if let Some(o) = z.offset {
+                let last = device_leds.saturating_sub(z.count.max(1));
+                if o > last {
+                    z.offset = Some(last);
+                }
+            }
+        }
         if self.cfg.zones[i] != before {
             self.changed();
+        }
+        // what does not fit is said out loud, not left to guesswork
+        if let Some(r) = self.cfg.zone_report(i) {
+            if r.over {
+                ui.add_space(6.0);
+                theme::warn(
+                    ui,
+                    &if i18n::is_de() {
+                        format!(
+                            "Die Zone reicht bis LED {}, das Gerät hat nur {leds} – die LEDs darüber bleiben dunkel.",
+                            r.end.saturating_sub(1)
+                        )
+                    } else {
+                        format!(
+                            "The zone reaches LED {}, the device has only {leds} – the LEDs above stay dark.",
+                            r.end.saturating_sub(1)
+                        )
+                    },
+                );
+            }
+            if let Some((j, lo, hi)) = r.overlap {
+                ui.add_space(6.0);
+                let other = self
+                    .cfg
+                    .zones
+                    .get(j)
+                    .map(|z| z.name.clone())
+                    .unwrap_or_default();
+                theme::warn(
+                    ui,
+                    &if i18n::is_de() {
+                        format!(
+                            "Überschneidet sich mit „{other}“ bei LED {lo}–{} – die zweite Zone gewinnt dort.",
+                            hi.saturating_sub(1)
+                        )
+                    } else {
+                        format!(
+                            "Overlaps “{other}” at LED {lo}–{} – the later zone wins there.",
+                            hi.saturating_sub(1)
+                        )
+                    },
+                );
+            }
         }
     }
 
@@ -2783,14 +3019,52 @@ mod tests {
     #[test]
     fn split_counts_add_up() {
         for total in [4u16, 7, 60, 143, 300] {
-            let c = split_counts(total, 9.0 / 16.0);
-            assert_eq!(
-                c.iter().map(|v| *v as u32).sum::<u32>(),
-                total as u32,
-                "{total}: {c:?}"
-            );
-            assert!(c[0] >= c[1], "long edges get more LEDs: {c:?}");
+            for ratio in [
+                9.0 / 16.0,
+                3.0 / 4.0,
+                16.0 / 9.0,
+                32.0 / 9.0,
+                f32::NAN,
+                -1.0,
+            ] {
+                let c = crate::config::split_counts(total, ratio);
+                assert_eq!(
+                    c.iter().map(|v| *v as u32).sum::<u32>(),
+                    total as u32,
+                    "{total} LEDs at ratio {ratio}: {c:?}"
+                );
+                assert!(c.iter().all(|v| *v >= 1), "every edge gets an LED: {c:?}");
+                // the longer edges get at least as many LEDs as the shorter ones
+                let r = if ratio.is_finite() && ratio > 0.0 {
+                    ratio.clamp(0.1, 10.0)
+                } else {
+                    9.0 / 16.0
+                };
+                if r <= 1.0 {
+                    assert!(c[0] >= c[1], "landscape: top holds more than left {c:?}");
+                } else {
+                    assert!(c[1] >= c[0], "portrait: sides hold more than top {c:?}");
+                }
+                // opposite edges are the same length, so they stay within one LED
+                assert!((c[0] as i32 - c[2] as i32).abs() <= 1, "{c:?}");
+                assert!((c[1] as i32 - c[3] as i32).abs() <= 1, "{c:?}");
+            }
         }
+    }
+
+    #[test]
+    fn shifting_the_led_block_stays_on_the_device() {
+        // from automatic packing (40) one step up
+        assert_eq!(shifted_start(None, 40, 1, 80), 41);
+        assert_eq!(shifted_start(None, 40, 10, 80), 50);
+        // never before LED 0
+        assert_eq!(shifted_start(Some(3), 0, -1, 80), 2);
+        assert_eq!(shifted_start(Some(3), 0, -10, 80), 0);
+        // never so far that the block leaves the device
+        assert_eq!(shifted_start(Some(75), 0, 10, 80), 80);
+        assert_eq!(shifted_start(Some(80), 0, 10, 80), 80);
+        // a block as long as the whole device can only sit at 0
+        assert_eq!(shifted_start(Some(0), 0, 10, 0), 0);
     }
 
     #[test]

@@ -153,6 +153,16 @@ starten. Ist der Build nicht notarisiert, meldet macOS, die App „kann nicht
   Zonenliste ist die Reihenfolge auf dem Streifen** (`LED 0–36`, `LED 37–58`, …).
   Die LED-Anzahl ist unabhängig von der Größe: das Rechteck wird in gleiche
   Zellen geteilt, eine pro LED, und jede Zelle gemittelt.
+- **LED-Bereich** – der Abschnitt des Streifens, den eine Zone treibt. Er steht
+  im Reiter *Zonen* unter *Erste LED*: mit dem Zahlenfeld oder den Knöpfen
+  `−10 −1 +1 +10` verschiebt man ihn über den ganzen Streifen, `Auto` legt die
+  Zone wieder automatisch hinter die Zone davor. Ein so gesetzter Bereich bleibt
+  beim Umsortieren der Liste stehen; passt er nicht aufs Gerät oder überlappt
+  eine andere Zone, steht das in Rot unter der Zone.
+- **Aufteilen** – *Auf 4 Kanten* teilt den LED-Bereich **der ausgewählten
+  Zone** auf oben, rechts, unten und links auf, nach Kantenlänge. Andere Zonen
+  desselben Geräts bleiben unangetastet; eine Zone mit fester erster LED behält
+  ihren Platz auf dem Streifen.
 - **Waagerecht / senkrecht** – waagerechte Zonen laufen links → rechts,
   senkrechte oben → unten. Ist ein Streifen andersherum verkabelt, wird das pro
   Gerät mit **Reihenfolge umkehren** korrigiert (spiegelt den ganzen
@@ -166,6 +176,7 @@ starten. Ist der Build nicht notarisiert, meldet macOS, die App „kann nicht
 | Aktion | So geht's |
 | --- | --- |
 | Zone verschieben / skalieren | Zone oder ihre Kanten und Ecken ziehen (rastet an Bildschirmkanten, Mitte und anderen Zonen ein; abschaltbar im Reiter *App*) |
+| LED-Bereich einer Zone verschieben | Reiter *Zonen* → *Erste LED* (Zahlenfeld oder `−10 −1 +1 +10`), `Auto` hebt die Festlegung auf |
 | Ausgewählte Zone fein verschieben | Pfeiltasten, mit <kbd>Shift</kbd> in großen Schritten |
 | Ausgewählte Zone löschen | <kbd>Entf</kbd> |
 | Auswahl aufheben | <kbd>Esc</kbd> |

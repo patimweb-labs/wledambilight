@@ -62,12 +62,17 @@ pub fn layout_hash(cfg: &Config) -> u64 {
 /// Turn the normalised zone layout into concrete screen cells for the current
 /// capture resolution. Everything is normalised, so any resolution works.
 pub fn build(cfg: &Config, w: u32, h: u32) -> Plan {
+    // the LED numbers come from the config, so the sampler, the preview and
+    // the numbers in the inspector can never disagree
+    let starts = cfg.zone_starts();
     let mut devices = Vec::new();
     for dev in cfg.devices.iter().filter(|d| d.enabled) {
         let mut groups: Vec<ZoneGroup> = Vec::new();
         let mut gains = vec![0.0f32; dev.led_count as usize];
-        let mut used: u32 = 0;
-        for zone in cfg.zones.iter().filter(|z| z.enabled && z.device == dev.id) {
+        for (zi, zone) in cfg.zones.iter().enumerate() {
+            if !zone.enabled || zone.device != dev.id {
+                continue;
+            }
             let x0 = ((zone.x * w as f32).floor() as i64).clamp(0, w as i64 - 1) as u32;
             let y0 = ((zone.y * h as f32).floor() as i64).clamp(0, h as i64 - 1) as u32;
             let x1 = (((zone.x + zone.w) * w as f32).ceil() as i64).clamp(x0 as i64 + 1, w as i64)
@@ -75,8 +80,7 @@ pub fn build(cfg: &Config, w: u32, h: u32) -> Plan {
             let y1 = (((zone.y + zone.h) * h as f32).ceil() as i64).clamp(y0 as i64 + 1, h as i64)
                 as u32;
             let n = zone.count.max(1) as u32;
-            let start = zone.offset.map(|o| o as u32).unwrap_or(used);
-            used = start + n;
+            let start = starts.get(zi).copied().unwrap_or(0);
             let mut cells = Vec::with_capacity(n as usize);
             for i in 0..n {
                 let cell = if zone.vertical {

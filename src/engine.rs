@@ -403,6 +403,7 @@ impl Engine {
 mod tests {
     use super::*;
     use crate::config::{DeviceCfg, Zone, ZonePreset};
+    use std::net::UdpSocket;
     use std::sync::Arc;
 
     fn setup(leds: u16) -> Config {
@@ -478,5 +479,282 @@ mod tests {
     fn median3_works() {
         assert_eq!(median3(1.0, 5.0, 3.0), 3.0);
         assert_eq!(median3(9.0, 1.0, 1.0), 1.0);
+    }
+
+    // ---------------------------------------------------------------- on the wire
+    //
+    // These tests run the whole chain - zone layout -> sampler -> smoothing ->
+    // DDP - against a socket that plays WLED. They check what actually arrives
+    // at a strip, not what one function in the middle thinks.
+
+    /// A WLED stand-in: receives DDP and rebuilds the LED buffer.
+    struct FakeStrip {
+        sock: UdpSocket,
+        len: usize,
+    }
+
+    impl FakeStrip {
+        fn new(len: usize) -> Self {
+            let sock = UdpSocket::bind("127.0.0.1:0").expect("bind a test socket");
+            sock.set_read_timeout(Some(Duration::from_millis(300)))
+                .unwrap();
+            Self { sock, len }
+        }
+
+        fn host(&self) -> String {
+            format!("127.0.0.1:{}", self.sock.local_addr().unwrap().port())
+        }
+
+        /// Wait for one complete DDP frame (the packet with PUSH set).
+        fn frame(&mut self) -> Vec<[u8; 3]> {
+            let mut leds = vec![[0u8; 3]; self.len];
+            let mut buf = [0u8; 4096];
+            let deadline = Instant::now() + Duration::from_secs(3);
+            while Instant::now() < deadline {
+                let Ok(n) = self.sock.recv(&mut buf) else {
+                    break; // timeout: no more packets
+                };
+                if n < 10 {
+                    continue;
+                }
+                let push = buf[0] & 0x01 != 0;
+                let first = u32::from_be_bytes([buf[4], buf[5], buf[6], buf[7]]) as usize / 3;
+                let count = u16::from_be_bytes([buf[8], buf[9]]) as usize / 3;
+                for i in 0..count {
+                    let o = 10 + i * 3;
+                    if o + 2 < n && first + i < self.len {
+                        leds[first + i] = [buf[o], buf[o + 1], buf[o + 2]];
+                    }
+                }
+                if push {
+                    break;
+                }
+            }
+            leds
+        }
+    }
+
+    /// A picture whose red channel runs left to right and whose green channel
+    /// runs top to bottom, so a LED can be traced back to the pixels it read.
+    /// 128x72 keeps both values inside a `u8`.
+    fn ramp(w: u32, h: u32, seq: u64) -> SharedFrame {
+        let mut data = Vec::with_capacity((w * h * 3) as usize);
+        for y in 0..h {
+            for x in 0..w {
+                data.push(x as u8);
+                data.push(y as u8);
+                data.push(0);
+            }
+        }
+        SharedFrame {
+            w,
+            h,
+            data: Arc::new(data),
+            seq,
+        }
+    }
+
+    /// Left half white, right half black.
+    fn halves(w: u32, h: u32, seq: u64) -> SharedFrame {
+        let mut data = Vec::with_capacity((w * h * 3) as usize);
+        for _ in 0..h {
+            for x in 0..w {
+                let v = if x < w / 2 { 255 } else { 0 };
+                data.extend_from_slice(&[v, v, v]);
+            }
+        }
+        SharedFrame {
+            w,
+            h,
+            data: Arc::new(data),
+            seq,
+        }
+    }
+
+    /// A config that passes colours through untouched and sends to `host`.
+    fn net_cfg(host: &str, leds: u16) -> Config {
+        let mut cfg = Config::default();
+        cfg.devices.push(DeviceCfg::new(host, "Strip", leds));
+        cfg.settings.smoothing_ms = 0.0;
+        cfg.settings.spatial = 0.0;
+        cfg.settings.slew = 0.0;
+        cfg.settings.gamma = 1.0;
+        cfg.settings.saturation = 1.0;
+        cfg.settings.brightness = 1.0;
+        cfg
+    }
+
+    fn mean(v: &[[u8; 3]], channel: usize) -> f32 {
+        if v.is_empty() {
+            return 0.0;
+        }
+        v.iter().map(|c| c[channel] as f32).sum::<f32>() / v.len() as f32
+    }
+
+    #[test]
+    fn a_pinned_led_block_lands_on_exactly_those_leds() {
+        let mut strip = FakeStrip::new(120);
+        let host = strip.host();
+        let mut cfg = net_cfg(&host, 120);
+        let mut zone = Zone::preset(ZonePreset::Full, host.clone(), 20, [0; 3]);
+        zone.offset = Some(50);
+        cfg.zones.push(zone);
+
+        let mut e = Engine::new(&cfg, 128, 72);
+        e.tick(&cfg, Some(&ramp(128, 72, 1)), 0.02);
+        let frame = strip.frame();
+
+        assert_eq!(frame.len(), 120, "the strip gets all its LEDs");
+        assert!(
+            frame[..50].iter().all(|c| *c == [0, 0, 0]),
+            "LEDs before the block stay dark: {:?}",
+            &frame[45..50]
+        );
+        assert!(
+            frame[70..].iter().all(|c| *c == [0, 0, 0]),
+            "LEDs after the block stay dark: {:?}",
+            &frame[70..75]
+        );
+        // inside the block the picture is read left to right
+        for k in 1..20 {
+            assert!(
+                frame[50 + k][0] > frame[49 + k][0],
+                "LED {} must be further right than LED {}: {:?}",
+                k,
+                k - 1,
+                &frame[50..70]
+            );
+        }
+    }
+
+    #[test]
+    fn two_zones_share_the_strip_in_list_order() {
+        let mut strip = FakeStrip::new(120);
+        let host = strip.host();
+        let mut cfg = net_cfg(&host, 120);
+        // zone 1 reads the left half, zone 2 the right half
+        let mut left = Zone::preset(ZonePreset::Full, host.clone(), 40, [0; 3]);
+        left.x = 0.0;
+        left.w = 0.5;
+        let mut right = Zone::preset(ZonePreset::Full, host.clone(), 30, [0; 3]);
+        right.x = 0.5;
+        right.w = 0.5;
+        cfg.zones.push(left);
+        cfg.zones.push(right);
+        assert_eq!(cfg.zone_ranges(), vec![(0, 40), (40, 70)]);
+
+        let mut e = Engine::new(&cfg, 128, 72);
+        e.tick(&cfg, Some(&halves(128, 72, 1)), 0.02);
+        let frame = strip.frame();
+        assert!(
+            frame[..40].iter().all(|c| *c == [255, 255, 255]),
+            "the first zone owns LED 0..39: {:?}",
+            &frame[..4]
+        );
+        assert!(
+            frame[40..70].iter().all(|c| *c == [0, 0, 0]),
+            "the second zone starts at LED 40: {:?}",
+            &frame[40..44]
+        );
+    }
+
+    #[test]
+    fn splitting_a_zone_lights_the_whole_strip_clockwise() {
+        let mut strip = FakeStrip::new(120);
+        let host = strip.host();
+        let mut cfg = net_cfg(&host, 120);
+        cfg.zones
+            .push(Zone::preset(ZonePreset::Full, host.clone(), 120, [0; 3]));
+
+        let counts = cfg.split_zone_into_edges(0, 9.0 / 16.0).unwrap();
+        assert_eq!(counts.iter().map(|c| *c as u32).sum::<u32>(), 120);
+        // four zones, one after the other, no gap and no overlap
+        let ranges = cfg.zone_ranges();
+        assert_eq!(ranges.len(), 4);
+        let mut expected = 0u32;
+        for (i, (start, end)) in ranges.iter().enumerate() {
+            assert_eq!(*start, expected, "zone {i} must start where {i} - 1 ended");
+            assert_eq!(*end, expected + counts[i] as u32);
+            expected = *end;
+        }
+        assert_eq!(expected, 120, "the four edges cover the whole strip");
+        assert!(cfg.zones[1].vertical && cfg.zones[3].vertical);
+
+        let mut e = Engine::new(&cfg, 128, 72);
+        e.tick(&cfg, Some(&ramp(128, 72, 1)), 0.02);
+        let frame = strip.frame();
+
+        let top = &frame[0..counts[0] as usize];
+        let right = &frame[counts[0] as usize..(counts[0] + counts[1]) as usize];
+        let bottom =
+            &frame[(counts[0] + counts[1]) as usize..(counts[0] + counts[1] + counts[2]) as usize];
+        let left = &frame[(120 - counts[3]) as usize..];
+
+        // top and bottom run left -> right, top sits at the top of the picture
+        assert!(top[1][0] > top[0][0] && bottom[1][0] > bottom[0][0]);
+        assert!(mean(top, 1) < mean(bottom, 1), "top rows over bottom rows");
+        // left and right run top -> bottom
+        assert!(right[1][1] > right[0][1], "right edge runs downwards");
+        assert!(left[1][1] > left[0][1], "left edge runs downwards");
+        assert!(
+            mean(right, 0) > mean(left, 0),
+            "right columns right of left"
+        );
+    }
+
+    #[test]
+    fn reverse_mirrors_the_whole_strip() {
+        let build = |reverse: bool| {
+            let strip = FakeStrip::new(8);
+            let host = strip.host();
+            let mut cfg = net_cfg(&host, 8);
+            cfg.devices[0].reverse = reverse;
+            cfg.zones
+                .push(Zone::preset(ZonePreset::Full, host.clone(), 8, [0; 3]));
+            let mut e = Engine::new(&cfg, 128, 72);
+            e.tick(&cfg, Some(&ramp(128, 72, 1)), 0.02);
+            let mut strip = strip;
+            strip.frame()
+        };
+        let forward = build(false);
+        let mut mirrored = build(true);
+        mirrored.reverse();
+        assert_eq!(forward, mirrored);
+        assert!(forward[0][0] < forward[7][0], "LED 0 is the left end");
+    }
+
+    #[test]
+    fn a_zone_that_does_not_fit_does_not_move_the_others() {
+        let mut strip = FakeStrip::new(10);
+        let host = strip.host();
+        let mut cfg = net_cfg(&host, 10);
+        // zone 1 owns LED 0..7 and reads the left half of the picture
+        let mut left = Zone::preset(ZonePreset::Full, host.clone(), 8, [0; 3]);
+        left.x = 0.0;
+        left.w = 0.5;
+        cfg.zones.push(left);
+        // zone 2 is pinned at LED 8 and claims five LEDs - two of them do not exist
+        let mut right = Zone::preset(ZonePreset::Full, host.clone(), 5, [0; 3]);
+        right.x = 0.5;
+        right.w = 0.5;
+        right.offset = Some(8);
+        cfg.zones.push(right);
+        assert_eq!(cfg.zone_ranges(), vec![(0, 8), (8, 13)]);
+        assert!(cfg.zone_report(1).unwrap().over);
+
+        let mut e = Engine::new(&cfg, 128, 72);
+        e.tick(&cfg, Some(&halves(128, 72, 1)), 0.02);
+        let frame = strip.frame();
+        assert_eq!(frame.len(), 10, "the packet never grows past the device");
+        assert!(
+            frame[..8].iter().all(|c| *c == [255, 255, 255]),
+            "the first zone keeps LED 0..7: {:?}",
+            &frame[..4]
+        );
+        assert!(
+            frame[8..].iter().all(|c| *c == [0, 0, 0]),
+            "the overflowing zone still drives the LEDs that exist: {:?}",
+            &frame[8..]
+        );
     }
 }

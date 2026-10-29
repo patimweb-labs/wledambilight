@@ -196,6 +196,11 @@ pub fn hint(ui: &mut Ui, text: &str) {
     ui.label(RichText::new(text).size(11.5).color(INK_FAINT));
 }
 
+/// A hint that points at a problem: zones overlapping, LEDs that do not exist.
+pub fn warn(ui: &mut Ui, text: &str) {
+    ui.label(RichText::new(text).size(11.5).color(CORAL));
+}
+
 // ------------------------------------------------------------------ containers
 
 pub fn card(ui: &mut Ui, add: impl FnOnce(&mut Ui)) -> Response {

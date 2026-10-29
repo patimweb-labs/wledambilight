@@ -150,6 +150,16 @@ is not notarised, macOS says the app “cannot be checked”: right-click the ap
   zones top → bottom. A strip that is wired the other way round is fixed per
   device with **Reverse order** (this mirrors the whole strip, including
   the order of split zones).
+- **LED block** – the section of the strip a zone drives. It sits on the
+  *Zones* tab under *First LED*: the number field or the `−10 −1 +1 +10`
+  buttons move it along the whole strip, `Auto` packs the zone behind the one
+  before it again. A block set this way stays where it is when the list is
+  reordered; if it does not fit the device or overlaps another zone, that is
+  written in red under the zone.
+- **Split** – *Split to 4 edges* shares the LED block of the **selected zone**
+  over top, right, bottom and left by edge length. Other zones of the same
+  device are left alone, and a zone with a fixed first LED keeps its place on
+  the strip.
 - **Capture resolution** – the screen is scaled down to a small buffer
   (default 320 px wide). That is the precision of the zones; higher values
   allow finer zones and cost a little more CPU.
@@ -159,6 +169,7 @@ is not notarised, macOS says the app “cannot be checked”: right-click the ap
 | Action | How |
 | --- | --- |
 | Move / resize a zone | drag the zone or its edges and corners (snaps to screen edges, centre and other zones; turn off on the *App* tab) |
+| Move the LED block of a zone | *Zones* tab → *First LED* (number field or `−10 −1 +1 +10`); `Auto` removes the pinning again |
 | Nudge the selected zone | arrow keys, with <kbd>Shift</kbd> in big steps |
 | Delete the selected zone | <kbd>Delete</kbd> |
 | Deselect | <kbd>Esc</kbd> |
