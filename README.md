@@ -39,8 +39,10 @@ entirely in your local network: no account, no cloud.
 - **Frame rate** 24–144 fps globally, plus a cap per device.
 - **Test picture** – instead of the screen, a rainbow running left → right
   with a white bar, a white frame and a centre cross: check zones, direction
-  and colours without handing out the screen. Switch on the *App* tab (“Test picture
-  instead of the screen”) or `AMBILIGHT_DEMO=1`.
+  and colours without handing out the screen. Toggle in the title bar (“Test
+  picture”, next to the status) and on the *App* tab, or `AMBILIGHT_DEMO=1`.
+  Once switched to the screen the permission stays for the session, so
+  switching back and forth is instant.
 - **Live view** – the preview shows the light each zone throws onto the wall,
   a ruler with the colour of every LED, and the exact output per device.
 - **Background operation** – tray / menu bar icon, close-to-tray,

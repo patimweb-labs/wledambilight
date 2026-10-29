@@ -136,25 +136,24 @@ impl Pipeline {
     }
 }
 
-/// Capture settings that need a restart of the capture when they change.
+/// Capture settings that need a restart of the screen capture when they change.
 /// (The Linux backend does not limit its rate, so fps changes don't count there.)
-fn capture_key(cfg: &Config) -> (u32, usize, u32, bool) {
+fn capture_key(cfg: &Config) -> (u32, usize, u32) {
     let fps = if cfg!(target_os = "linux") {
         0
     } else {
         cfg.settings.target_fps
     };
-    (
-        cfg.settings.capture_width,
-        cfg.settings.monitor,
-        fps,
-        cfg.settings.test_image,
-    )
+    (cfg.settings.capture_width, cfg.settings.monitor, fps)
 }
 
 fn run(shared: Arc<Shared>, stop: Arc<AtomicBool>) {
-    let mut capture: Option<ScreenCapture> = None;
-    let mut capture_cfg = (0u32, 0usize, 0u32, false);
+    // Two sources, never both in the pipeline: the screen (portal) and the
+    // test picture. Switching keeps the portal session alive - re-negotiating
+    // it on every switch is what used to leave the preview black.
+    let mut screen: Option<ScreenCapture> = None;
+    let mut test: Option<ScreenCapture> = None;
+    let mut capture_cfg = (0u32, 0usize, 0u32);
     let mut restart_seen = 0u64;
     let mut cfg = shared.config();
     let mut cfg_seen = shared.cfg_version.load(Ordering::Acquire);
@@ -183,26 +182,51 @@ fn run(shared: Arc<Shared>, stop: Arc<AtomicBool>) {
             continue;
         }
 
-        // (re)start the screen capture when needed
-        let restart = shared.restart.load(Ordering::Relaxed);
-        let key = capture_key(&cfg);
-        if capture.is_none() || key != capture_cfg || restart != restart_seen {
-            restart_seen = restart;
-            capture_cfg = key;
-            drop(capture.take()); // stop the old one first (releases the portal session)
-            capture = Some(ScreenCapture::start(CaptureOptions {
-                width: cfg.settings.capture_width,
-                fps: cfg.settings.target_fps,
-                monitor: cfg.settings.monitor,
-                restore_token: cfg.settings.restore_token.clone(),
-                test_image: cfg.settings.test_image,
-            }));
+        let test_mode = cfg.settings.test_image;
+        if test_mode {
+            // the test picture needs no permission and starts in milliseconds
+            if test.is_none() {
+                test = Some(ScreenCapture::start(CaptureOptions {
+                    width: cfg.settings.capture_width,
+                    fps: cfg.settings.target_fps,
+                    monitor: 0,
+                    restore_token: None,
+                    test_image: true,
+                }));
+            }
+        } else {
+            if let Some(old) = test.take() {
+                old.stop(); // the test picture is the cheap one: stop it at once
+            }
+            let restart = shared.restart.load(Ordering::Relaxed);
+            let key = capture_key(&cfg);
+            if screen.is_none() || key != capture_cfg || restart != restart_seen {
+                restart_seen = restart;
+                capture_cfg = key;
+                if let Some(old) = screen.take() {
+                    old.stop(); // never block the pipeline on a portal teardown
+                }
+                screen = Some(ScreenCapture::start(CaptureOptions {
+                    width: cfg.settings.capture_width,
+                    fps: cfg.settings.target_fps,
+                    monitor: cfg.settings.monitor,
+                    restore_token: cfg.settings.restore_token.clone(),
+                    test_image: false,
+                }));
+            }
         }
 
-        let frame = capture.as_ref().map(|c| c.frame());
-        if let Some(c) = capture.as_ref() {
-            if let Some(t) = c.restore_token() {
-                shared.store_token(t);
+        let active = if test_mode {
+            test.as_ref()
+        } else {
+            screen.as_ref()
+        };
+        let frame = active.map(|c| c.frame());
+        if !test_mode {
+            if let Some(c) = screen.as_ref() {
+                if let Some(t) = c.restore_token() {
+                    shared.store_token(t);
+                }
             }
         }
 
@@ -240,7 +264,7 @@ fn run(shared: Arc<Shared>, stop: Arc<AtomicBool>) {
             l.clone_from(&engine.last);
         }
         if let Ok(mut st) = shared.stats.lock() {
-            if let Some(c) = capture.as_ref() {
+            if let Some(c) = active {
                 st.status = c.status();
                 let scr = c.screen();
                 if scr.0 > 0 {
@@ -259,4 +283,21 @@ fn run(shared: Arc<Shared>, stop: Arc<AtomicBool>) {
         }
     }
     engine.shutdown();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_mode_switch_must_not_recreate_the_screen_capture() {
+        // the worker switches the source; the portal session stays alive, so
+        // the screen does not have to be negotiated again on every switch
+        let mut cfg = Config::default();
+        let before = capture_key(&cfg);
+        cfg.settings.test_image = true;
+        assert_eq!(capture_key(&cfg), before);
+        cfg.settings.test_image = false;
+        assert_eq!(capture_key(&cfg), before);
+    }
 }

@@ -28,8 +28,6 @@ pub fn enabled() -> bool {
 /// The screen the test picture pretends to be (aspect and size only).
 const SCREEN: (u32, u32) = (2560, 1440);
 
-const TAU: f32 = std::f32::consts::TAU;
-
 fn hsv(h: f32, s: f32, v: f32) -> [f32; 3] {
     let h = h.rem_euclid(1.0) * 6.0;
     let i = h.floor() as i32;

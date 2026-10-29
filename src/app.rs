@@ -263,6 +263,39 @@ impl App {
         self.notice = Some((text.into(), Instant::now()));
     }
 
+    /// Throw away the picture that is on the strip and in the preview, so a
+    /// change of source never leaves the old picture behind.
+    fn clear_picture(&mut self) {
+        let (w, h) = self.capture_dims();
+        *self.shared.frame.lock().unwrap() = capture::SharedFrame::black(w.max(16), h.max(9));
+        self.texture = None;
+        self.texture_seq = u64::MAX;
+    }
+
+    /// Switch between the test picture and the real screen. Used by the button
+    /// in the title bar and by the switch on the *App* tab.
+    fn set_test_image(&mut self, on: bool) {
+        if self.cfg.settings.test_image == on {
+            return;
+        }
+        self.cfg.settings.test_image = on;
+        self.clear_picture();
+        self.notify(if on {
+            tr(
+                "Testbild an – die LEDs folgen dem Testbild statt dem Bildschirm",
+                "Test picture on – the LEDs follow the test picture, not the screen",
+            )
+        } else {
+            tr(
+                "Bildschirm an – die LEDs folgen wieder dem Bildschirm",
+                "Screen on – the LEDs follow the screen again",
+            )
+        });
+        // the pipeline switches the source by itself; the portal session is
+        // left alone, so switching back and forth stays instant
+        self.changed();
+    }
+
     fn capture_dims(&self) -> (u32, u32) {
         let d = self.snap.stats.dims;
         if d.0 > 8 && d.1 > 8 {
@@ -940,6 +973,27 @@ impl App {
                         }
                     };
                     theme::status_pill(ui, &text, color);
+                    ui.add_space(10.0);
+                    // one plain toggle, right where the mode is visible: on =
+                    // test picture, off = screen
+                    let mut test_on = self.cfg.settings.test_image;
+                    let tip = if capture::test_picture_forced() {
+                        tr(
+                            "AMBILIGHT_DEMO ist gesetzt – diese Variable entscheidet, nicht der Schalter",
+                            "AMBILIGHT_DEMO is set – the variable decides, not this switch",
+                        )
+                    } else {
+                        tr(
+                            "An: Testbild statt Bildschirm. Aus: echter Bildschirm.",
+                            "On: test picture instead of the screen. Off: the real screen.",
+                        )
+                    };
+                    if theme::switch(ui, &mut test_on, tr("Testbild", "Test picture"))
+                        .on_hover_text(tip)
+                        .changed()
+                    {
+                        self.set_test_image(test_on);
+                    }
 
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         let manual = self.tray_state.manual_pause.load(Ordering::Relaxed);
@@ -2292,10 +2346,19 @@ impl App {
             theme::hint(
                 ui,
                 tr(
-                    "Zum Ausprobieren: die LEDs zeigen das Testbild, nicht den Bildschirm.",
-                    "To try out: the LEDs show the test picture, not the screen.",
+                    "Zum Ausprobieren: die LEDs zeigen das Testbild, nicht den Bildschirm. Einmal auf Bildschirm geschaltet, bleibt die Freigabe bestehen – hin und her wechseln geht dann sofort.",
+                    "To try out: the LEDs show the test picture, not the screen. Once you have switched to the screen, the permission stays – switching back and forth is instant.",
                 ),
             );
+            if capture::test_picture_forced() {
+                theme::warn(
+                    ui,
+                    tr(
+                        "AMBILIGHT_DEMO ist gesetzt: das Testbild läuft unabhängig von diesem Schalter. Variable entfernen und die App neu starten, um wieder den Bildschirm zu nehmen.",
+                        "AMBILIGHT_DEMO is set: the test picture runs regardless of this switch. Remove the variable and restart to use the screen again.",
+                    ),
+                );
+            }
             ui.add_space(6.0);
             if !st.test_image {
                 if capture::HAS_MONITOR_CHOICE && !monitors.is_empty() {
@@ -2443,17 +2506,11 @@ impl App {
         });
         if self.cfg.settings != before {
             if self.cfg.settings.test_image != before.test_image {
-                self.notify(if self.cfg.settings.test_image {
-                    tr(
-                        "Testbild an – die LEDs folgen dem Testbild statt dem Bildschirm",
-                        "Test picture on – the LEDs follow the test picture, not the screen",
-                    )
-                } else {
-                    tr(
-                        "Testbild aus – die LEDs folgen wieder dem Bildschirm",
-                        "Test picture off – the LEDs follow the screen again",
-                    )
-                });
+                // same path as the button in the title bar: drop the old
+                // picture and start the capture again
+                let on = self.cfg.settings.test_image;
+                self.cfg.settings.test_image = !on;
+                self.set_test_image(on);
             }
             if self.cfg.settings.restore_token.is_none() && before.restore_token.is_some() {
                 // Linux: forget the token and ask the portal again

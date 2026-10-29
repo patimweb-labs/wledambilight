@@ -42,8 +42,10 @@ und macOS**, komplett im lokalen Netz: kein Konto, keine Cloud.
   wirft, ein Lineal mit der Farbe jeder LED und die genaue Ausgabe pro Gerät.
 - **Testbild** – statt des Bildschirms ein Regenbogen von links nach rechts
   mit weißer Leiste, weißem Rahmen und Kreuz: Zonen, Laufrichtung und Farben
-  lassen sich prüfen, ohne die Bildschirmfreigabe zu erteilen. Schalter im Reiter *App*
-  („Testbild statt Bildschirm“) oder `AMBILIGHT_DEMO=1`.
+  lassen sich prüfen, ohne die Bildschirmfreigabe zu erteilen. Schalter in der
+  Titelleiste („Testbild“, neben dem Status) und im Reiter *App*, oder
+  `AMBILIGHT_DEMO=1`. Einmal auf Bildschirm geschaltet, bleibt die Freigabe für
+  die Sitzung bestehen – hin und her wechseln geht danach sofort.
 - **Hintergrundbetrieb** – Tray-/Menüleisten-Symbol, Schließen ins Tray,
   `--minimized` für den Autostart, `--headless` für Systeme ohne Desktop.
 - **Deutsche und englische** Oberfläche, richtet sich nach der Systemsprache.

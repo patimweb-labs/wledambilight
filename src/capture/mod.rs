@@ -187,6 +187,20 @@ impl ScreenCapture {
         Self { handles, join }
     }
 
+    /// Stop the backend without waiting for it: the thread is joined in the
+    /// background. A portal or GStreamer teardown can take a moment, and
+    /// neither the pipeline nor the next capture may wait for that.
+    pub fn stop(mut self) {
+        self.handles.stop.store(true, Ordering::Relaxed);
+        if let Some(j) = self.join.take() {
+            let _ = std::thread::Builder::new()
+                .name("capture-stop".into())
+                .spawn(move || {
+                    let _ = j.join();
+                });
+        }
+    }
+
     pub fn status(&self) -> CaptureStatus {
         self.handles.status.lock().unwrap().clone()
     }
@@ -208,6 +222,12 @@ impl ScreenCapture {
 /// app, or `AMBILIGHT_DEMO=1` from the environment.
 pub fn test_picture(setting: bool) -> bool {
     setting || demo::enabled()
+}
+
+/// `AMBILIGHT_DEMO=1`: the environment forces the test picture, the switch in
+/// the app cannot turn it off. The interface says so instead of doing nothing.
+pub fn test_picture_forced() -> bool {
+    demo::enabled()
 }
 
 /// Monitors the user can choose from (empty on Linux, where the portal asks).
