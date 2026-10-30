@@ -216,6 +216,8 @@ pub struct Settings {
     pub monitor: usize,
     /// "auto", "de" or "en"
     pub language: String,
+    /// name of the colour theme (built-in or a file in `themes/`)
+    pub theme: String,
 }
 
 impl Default for Settings {
@@ -235,6 +237,7 @@ impl Default for Settings {
             snap: true,
             monitor: 0,
             language: "auto".into(),
+            theme: "Crosspoint".into(),
         }
     }
 }

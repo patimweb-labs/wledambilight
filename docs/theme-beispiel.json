@@ -1,0 +1,19 @@
+{
+  "name": "Beispiel",
+  "wall": "#07090F",
+  "panel": "#0C1119",
+  "surface": "#111823",
+  "raised": "#1B2637",
+  "matte": "#04060A",
+  "line": "#1E2C3E",
+  "line_hi": "#2F4761",
+  "ink": "#DCE6F2",
+  "ink_dim": "#9AACBF",
+  "ink_faint": "#66798D",
+  "accent": "#39DD93",
+  "accent_dark": "#1C7D54",
+  "accent_ink": "#04140C",
+  "ok": "#39DD93",
+  "warn": "#F3C24B",
+  "error": "#FF6B6B"
+}

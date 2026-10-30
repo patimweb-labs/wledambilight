@@ -241,6 +241,36 @@ the file can be copied between machines. The file is written atomically.
 It contains the Nanoleaf pairing token (which only grants access to that one
 device in your network), so don't post it publicly.
 
+## Design and your own themes
+
+Every colour of the window comes from one palette (wall, panel, surface,
+raised, line, ink, accent, ok, warn, error). A theme is such a palette;
+switching it on the *App* tab under *Design* swaps the values, no restart.
+
+Four themes are built in:
+
+| Theme | Look |
+| --- | --- |
+| **Crosspoint** (default) | blue-black blueprint (`#060A12`), signal green `#39DD93` |
+| **Crosspoint Hell** | light background, dark text, same accent |
+| **Mono** | black and white with high contrast, colour carries no meaning |
+| **Amber** | the original warm white of the first version |
+
+**Write your own:** one JSON file per theme in
+
+```text
+~/.config/wled-ambilight/themes/          (Flatpak: ~/.var/app/…/config/wled-ambilight/themes/)
+```
+
+Every field is optional and is laid over the default theme, so a typo in the
+file changes one colour, not the whole window. Unknown or broken files are
+reported on the *App* tab under *Design* instead of being swallowed silently.
+Template: `docs/theme-beispiel.json`.
+
+```json
+{ "name": "My theme", "accent": "#FF7A45", "wall": "#0A0710", "ink": "#F2E9FF" }
+```
+
 ## How it works
 
 ```text

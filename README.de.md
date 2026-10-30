@@ -250,6 +250,36 @@ atomar geschrieben (kein halb geschriebener Zustand bei Absturz). Sie enthält
 den Nanoleaf-Kopplungsschlüssel (gilt nur für dieses eine Gerät im eigenen
 Netz) – also nicht öffentlich posten.
 
+## Design und eigene Themes
+
+Die Oberfläche holt **jede** Farbe aus einem Farbsatz (Wall, Panel, Surface,
+Raised, Line, Ink, Accent, Ok, Warn, Error). Ein Theme ist so ein Satz; der
+Wechsel im Reiter *App* unter *Design* tauscht nur die Werte, ohne Neustart.
+
+Eingebaut sind vier Themes:
+
+| Theme | Aussehen |
+| --- | --- |
+| **Crosspoint** (Standard) | blauschwarzes Blueprint (`#060A12`), Signalgrün `#39DD93` |
+| **Crosspoint Hell** | heller Grund, dunkle Schrift, gleicher Akzent |
+| **Mono** | Schwarz/Weiß mit hohem Kontrast, Farbe trägt keine Bedeutung |
+| **Amber** | das ursprüngliche Warmweiß der ersten Version |
+
+**Eigenes Theme anlegen:** eine JSON-Datei pro Theme in
+
+```text
+~/.config/wled-ambilight/themes/          (Flatpak: ~/.var/app/…/config/wled-ambilight/themes/)
+```
+
+Jedes Feld ist optional und legt sich über das Standard-Theme – ein Tippfehler
+in der Datei ändert also eine Farbe, nicht das ganze Fenster. Unbekannte oder
+kaputte Dateien werden im Reiter *App* unter *Design* gemeldet, nicht still
+verschluckt. Vorlage: `docs/theme-beispiel.json`.
+
+```json
+{ "name": "Mein Theme", "accent": "#FF7A45", "wall": "#0A0710", "ink": "#F2E9FF" }
+```
+
 ## Funktionsweise
 
 ```text

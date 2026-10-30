@@ -155,7 +155,7 @@ pub fn button_tinted(ui: &mut Ui, icon: Icon, tip: &str, hover: Option<Color32>)
     let size = Vec2::splat(28.0);
     let (rect, resp) = ui.allocate_exact_size(size, Sense::click());
     let bg = if resp.hovered() {
-        theme::RAISED
+        theme::raised()
     } else {
         Color32::TRANSPARENT
     };
@@ -164,7 +164,7 @@ pub fn button_tinted(ui: &mut Ui, icon: Icon, tip: &str, hover: Option<Color32>)
     let color = if resp.hovered() {
         hover.unwrap_or(Color32::WHITE)
     } else {
-        theme::INK_DIM
+        theme::ink_dim()
     };
     paint(painter, rect.shrink(7.5), icon, color);
     resp.on_hover_cursor(egui::CursorIcon::PointingHand)
@@ -202,24 +202,32 @@ pub fn labelled_response(ui: &mut Ui, icon: Icon, label: &str, kind: Kind) -> eg
             if hov {
                 Color32::from_rgb(255, 210, 140)
             } else {
-                theme::AMBER
+                theme::accent()
             },
             Color32::TRANSPARENT,
-            theme::AMBER_INK,
+            theme::accent_ink(),
         ),
         Kind::Secondary => (
-            if hov { theme::RAISED } else { theme::SURFACE },
-            if hov { theme::LINE_HI } else { theme::LINE },
-            if hov { Color32::WHITE } else { theme::INK },
+            if hov {
+                theme::raised()
+            } else {
+                theme::surface()
+            },
+            if hov { theme::line_hi() } else { theme::line() },
+            if hov { Color32::WHITE } else { theme::ink() },
         ),
         Kind::Ghost => (
             if hov {
-                theme::RAISED
+                theme::raised()
             } else {
                 Color32::TRANSPARENT
             },
             Color32::TRANSPARENT,
-            if hov { Color32::WHITE } else { theme::INK_DIM },
+            if hov {
+                Color32::WHITE
+            } else {
+                theme::ink_dim()
+            },
         ),
     };
     painter.rect(

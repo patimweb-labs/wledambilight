@@ -175,13 +175,27 @@ pub struct App {
     start_minimized: bool,
     /// what the pipeline thread currently knows - compared every frame
     pushed: Config,
+    /// every colour theme: built-ins plus the files in `themes/`
+    themes: Vec<(String, theme::Palette)>,
+    /// what went wrong while reading theme files
+    theme_problems: Vec<String>,
 }
 
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>, start_minimized: bool) -> Self {
-        theme::install(&cc.egui_ctx);
         let cfg = Config::load();
         i18n::init(&cfg.settings.language);
+        let (themes, theme_problems) = theme::load_themes();
+        let active = themes
+            .iter()
+            .find(|(name, _)| *name == cfg.settings.theme)
+            .map(|(_, p)| *p)
+            .unwrap_or_default();
+        theme::set_palette(active);
+        theme::install(&cc.egui_ctx);
+        for problem in &theme_problems {
+            eprintln!("Theme: {problem}");
+        }
 
         #[cfg(target_os = "windows")]
         {
@@ -237,6 +251,8 @@ impl App {
             monitors: None,
             start_minimized,
             pushed: cfg.clone(),
+            themes,
+            theme_problems,
             cfg,
         };
         app.sync_config();
@@ -914,18 +930,18 @@ fn snap_to_edge(z: &mut Zone) {
 
 fn status_text(s: &CaptureStatus) -> (String, Color32) {
     match s {
-        CaptureStatus::Running { .. } => (tr("Live", "Live").to_string(), theme::MINT),
+        CaptureStatus::Running { .. } => (tr("Live", "Live").to_string(), theme::ok()),
         CaptureStatus::Starting => (
             tr("Aufnahme startet …", "Starting capture …").to_string(),
-            theme::AMBER,
+            theme::warning(),
         ),
         CaptureStatus::Error(_) => (
             tr("Aufnahme gestoppt", "Capture stopped").to_string(),
-            theme::CORAL,
+            theme::error(),
         ),
         CaptureStatus::Idle => (
             tr("Wartet auf Aufnahme", "Waiting for capture").to_string(),
-            theme::INK_FAINT,
+            theme::ink_faint(),
         ),
     }
 }
@@ -938,9 +954,9 @@ impl App {
             .exact_size(56.0)
             .frame(
                 egui::Frame::new()
-                    .fill(theme::WALL)
+                    .fill(theme::wall())
                     .inner_margin(egui::Margin::symmetric(18, 0))
-                    .stroke(Stroke::new(1.0_f32, theme::LINE)),
+                    .stroke(Stroke::new(1.0_f32, theme::line())),
             )
             .show(root, |ui| {
                 ui.horizontal_centered(|ui| {
@@ -952,16 +968,16 @@ impl App {
                     ui.label(
                         RichText::new(format!("v{}", crate::VERSION))
                             .size(11.5)
-                            .color(theme::INK_FAINT),
+                            .color(theme::ink_faint()),
                     );
                     ui.add_space(14.0);
 
                     let paused = self.shared.paused.load(Ordering::Relaxed);
                     let stats = &self.snap.stats;
                     let (text, color) = if paused {
-                        (tr("Pausiert", "Paused").to_string(), theme::AMBER)
+                        (tr("Pausiert", "Paused").to_string(), theme::accent())
                     } else if capture::test_picture(self.cfg.settings.test_image) {
-                        (tr("Testbild", "Test picture").to_string(), theme::AMBER)
+                        (tr("Testbild", "Test picture").to_string(), theme::accent())
                     } else {
                         let (t, c) = status_text(&stats.status);
                         if matches!(stats.status, CaptureStatus::Running { .. })
@@ -1026,7 +1042,7 @@ impl App {
             .size_range(250.0..=440.0)
             .frame(
                 egui::Frame::new()
-                    .fill(theme::PANEL)
+                    .fill(theme::panel())
                     .inner_margin(egui::Margin {
                         left: 16,
                         right: 14,
@@ -1040,12 +1056,12 @@ impl App {
                     if !self.cfg.devices.is_empty() {
                         ui.label(
                             RichText::new(self.cfg.devices.len().to_string())
-                                .color(theme::INK_FAINT),
+                                .color(theme::ink_faint()),
                         );
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if self.scan.is_some() {
-                            ui.add(egui::Spinner::new().size(16.0).color(theme::INK_DIM));
+                            ui.add(egui::Spinner::new().size(16.0).color(theme::ink_dim()));
                         } else if icons::button(
                             ui,
                             Icon::Search,
@@ -1071,7 +1087,7 @@ impl App {
     }
 
     fn empty_devices(&mut self, ui: &mut egui::Ui) {
-        theme::card_with(ui, theme::SURFACE, theme::LINE, |ui| {
+        theme::card_with(ui, theme::surface(), theme::line(), |ui| {
             ui.label(
                 RichText::new(tr("Noch kein Gerät", "No device yet")).font(theme::semibold(13.5)),
             );
@@ -1081,7 +1097,7 @@ impl App {
                     "WLED devices on the same network are found automatically. Click + to add one.",
                 ))
                 .size(12.0)
-                .color(theme::INK_DIM),
+                .color(theme::ink_dim()),
             );
             if self.scan.is_none() {
                 ui.add_space(4.0);
@@ -1122,15 +1138,19 @@ impl App {
             let unpaired = dev.kind == DeviceKind::Nanoleaf && dev.token.is_none();
             theme::card_with(
                 ui,
-                theme::SURFACE,
-                if open { theme::LINE_HI } else { theme::LINE },
+                theme::surface(),
+                if open {
+                    theme::line_hi()
+                } else {
+                    theme::line()
+                },
                 |ui| {
                     // header: always visible
                     ui.horizontal(|ui| {
                         let dot = if dev.enabled {
-                            theme::MINT
+                            theme::ok()
                         } else {
-                            theme::INK_FAINT
+                            theme::ink_faint()
                         };
                         let (r, _) = ui.allocate_exact_size(Vec2::splat(10.0), Sense::hover());
                         ui.painter().circle_filled(r.center(), 4.0, dot);
@@ -1159,11 +1179,15 @@ impl App {
                         ui.label(
                             RichText::new(dev.kind.label())
                                 .size(11.0)
-                                .color(theme::AMBER),
+                                .color(theme::accent()),
                         );
                         // Razer always lives on this PC; no address to show
                         if dev.kind != DeviceKind::Razer {
-                            ui.label(RichText::new(&dev.host).size(11.5).color(theme::INK_FAINT));
+                            ui.label(
+                                RichText::new(&dev.host)
+                                    .size(11.5)
+                                    .color(theme::ink_faint()),
+                            );
                         }
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             let txt = if unpaired {
@@ -1175,9 +1199,9 @@ impl App {
                             };
                             ui.label(RichText::new(txt).size(11.5).color(
                                 if usage.problem || unpaired {
-                                    theme::CORAL
+                                    theme::error()
                                 } else {
-                                    theme::INK_DIM
+                                    theme::ink_dim()
                                 },
                             ));
                         });
@@ -1187,12 +1211,12 @@ impl App {
                     if dev.enabled && dev.kind != DeviceKind::Wled && !unpaired {
                         let (txt, col) = match statuses.get(&dev.id) {
                             Some(output::Status::Ok) => {
-                                (tr("Verbunden", "Connected").to_string(), theme::MINT)
+                                (tr("Verbunden", "Connected").to_string(), theme::ok())
                             }
-                            Some(output::Status::Error(e)) => (e.clone(), theme::CORAL),
+                            Some(output::Status::Error(e)) => (e.clone(), theme::error()),
                             _ => (
                                 tr("Verbinde …", "Connecting …").to_string(),
-                                theme::INK_FAINT,
+                                theme::ink_faint(),
                             ),
                         };
                         ui.label(RichText::new(txt).size(11.5).color(col));
@@ -1491,11 +1515,11 @@ impl App {
         ui.horizontal(|ui| {
             theme::field_label(ui, tr("Gefunden", "Found"));
             if !finished {
-                ui.add(egui::Spinner::new().size(12.0).color(theme::INK_FAINT));
+                ui.add(egui::Spinner::new().size(12.0).color(theme::ink_faint()));
             }
         });
         for f in &pending {
-            theme::card_with(ui, theme::WALL, theme::LINE, |ui| {
+            theme::card_with(ui, theme::wall(), theme::line(), |ui| {
                 ui.horizontal(|ui| {
                     ui.vertical(|ui| {
                         ui.spacing_mut().item_spacing.y = 2.0;
@@ -1511,7 +1535,7 @@ impl App {
                         ui.label(
                             RichText::new(format!("{}{leds} · {}", f.kind.label(), f.detail))
                                 .size(11.5)
-                                .color(theme::INK_FAINT),
+                                .color(theme::ink_faint()),
                         );
                     });
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -1554,7 +1578,7 @@ impl App {
             };
             let r = ui.add(
                 egui::TextEdit::singleline(&mut self.manual_host)
-                    .hint_text(RichText::new(hint).color(theme::INK_FAINT))
+                    .hint_text(RichText::new(hint).color(theme::ink_faint()))
                     .desired_width(w)
                     .margin(egui::Margin::symmetric(8, 6)),
             );
@@ -1638,7 +1662,7 @@ impl App {
             .size_range(280.0..=460.0)
             .frame(
                 egui::Frame::new()
-                    .fill(theme::PANEL)
+                    .fill(theme::panel())
                     .inner_margin(egui::Margin {
                         left: 14,
                         right: 16,
@@ -1682,7 +1706,7 @@ impl App {
                         "A zone is an area of the picture whose colour drives a section of the strip. New devices get one automatically.",
                     ))
                     .size(12.0)
-                    .color(theme::INK_DIM),
+                    .color(theme::ink_dim()),
                 );
             });
             ui.add_space(8.0);
@@ -1724,14 +1748,14 @@ impl App {
                 .unwrap_or_else(|| "—".into());
             let resp = egui::Frame::new()
                 .fill(if selected {
-                    theme::RAISED
+                    theme::raised()
                 } else {
-                    theme::PANEL
+                    theme::panel()
                 })
                 .stroke(Stroke::new(
                     1.0_f32,
                     if selected {
-                        theme::LINE_HI
+                        theme::line_hi()
                     } else {
                         Color32::TRANSPARENT
                     },
@@ -1744,7 +1768,7 @@ impl App {
                         ui.painter().rect_filled(
                             r,
                             CornerRadius::same(2),
-                            if enabled { color } else { theme::LINE_HI },
+                            if enabled { color } else { theme::line_hi() },
                         );
                         // the text gets the width that is left after the buttons,
                         // so a long device name never runs under them
@@ -1759,9 +1783,9 @@ impl App {
                                     egui::Label::new(
                                         RichText::new(&name).font(theme::semibold(13.0)).color(
                                             if enabled {
-                                                theme::INK
+                                                theme::ink()
                                             } else {
-                                                theme::INK_FAINT
+                                                theme::ink_faint()
                                             },
                                         ),
                                     )
@@ -1776,9 +1800,9 @@ impl App {
                                         ))
                                         .size(11.5)
                                         .color(if bad {
-                                            theme::CORAL
+                                            theme::error()
                                         } else {
-                                            theme::INK_FAINT
+                                            theme::ink_faint()
                                         }),
                                     )
                                     .truncate(),
@@ -1821,7 +1845,7 @@ impl App {
                     &mut bar,
                     Icon::Trash,
                     tr("Zone löschen (Entf)", "Delete zone (Del)"),
-                    Some(theme::CORAL),
+                    Some(theme::error()),
                 ) {
                     remove = Some(i);
                 }
@@ -2035,7 +2059,7 @@ impl App {
                 )
             };
             ui.horizontal(|ui| {
-                ui.label(RichText::new(text).size(11.5).color(theme::INK_FAINT));
+                ui.label(RichText::new(text).size(11.5).color(theme::ink_faint()));
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if ui
                         .add_enabled(
@@ -2093,7 +2117,7 @@ impl App {
                 {
                     z.w = (pw / cap.0 as f32).clamp(1.0 / cap.0 as f32, 1.0);
                 }
-                ui.label(RichText::new("×").color(theme::INK_FAINT));
+                ui.label(RichText::new("×").color(theme::ink_faint()));
                 if ui
                     .add(
                         egui::DragValue::new(&mut ph)
@@ -2326,6 +2350,9 @@ impl App {
 
     fn app_tab(&mut self, ui: &mut egui::Ui) {
         let before = self.cfg.settings.clone();
+        // the picker needs this while `st` borrows the settings mutably
+        let themes = self.themes.clone();
+        let theme_problems = self.theme_problems.clone();
         let (sw, sh) = self.screen_size();
         if capture::HAS_MONITOR_CHOICE && self.monitors.is_none() {
             self.monitors = Some(capture::monitors());
@@ -2455,6 +2482,46 @@ impl App {
         });
 
         ui.add_space(12.0);
+        theme::title(ui, tr("Design", "Design"));
+        ui.add_space(4.0);
+        theme::card(ui, |ui| {
+            ui.horizontal(|ui| {
+                theme::field_label(ui, tr("Farbschema", "Theme"));
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let names: Vec<String> = themes.iter().map(|(n, _)| n.clone()).collect();
+                    let idxs: Vec<usize> = (0..names.len()).collect();
+                    let mut pick = names.iter().position(|n| *n == st.theme).unwrap_or(0);
+                    if theme::combo(ui, "theme", 170.0, &mut pick, |i| names[i].clone(), &idxs) {
+                        if let Some(name) = names.get(pick) {
+                            st.theme = name.clone();
+                        }
+                    }
+                });
+            });
+            if let Some((_, p)) = themes.iter().find(|(n, _)| *n == st.theme) {
+                ui.add_space(4.0);
+                theme::swatch(ui, p);
+            }
+            theme::hint(
+                ui,
+                &if i18n::is_de() {
+                    format!(
+                        "Eigene Themes: eine JSON-Datei pro Theme in {}",
+                        theme::theme_dir().display()
+                    )
+                } else {
+                    format!(
+                        "Own themes: one JSON file per theme in {}",
+                        theme::theme_dir().display()
+                    )
+                },
+            );
+            for problem in &theme_problems {
+                theme::warn(ui, problem);
+            }
+        });
+
+        ui.add_space(12.0);
         theme::title(ui, tr("Sprache", "Language"));
         ui.add_space(4.0);
         let mut lang = match st.language.as_str() {
@@ -2485,12 +2552,12 @@ impl App {
             ui.label(
                 RichText::new("© 2026 Patrick Weppelmann · GPL-3.0")
                     .size(12.0)
-                    .color(theme::INK_DIM),
+                    .color(theme::ink_dim()),
             );
             ui.hyperlink_to(
                 RichText::new("github.com/Smotherer007/wledambilight")
                     .size(12.0)
-                    .color(theme::AMBER),
+                    .color(theme::accent()),
                 "https://github.com/Smotherer007/wledambilight",
             );
             ui.add_space(4.0);
@@ -2504,11 +2571,20 @@ impl App {
             ui.label(
                 RichText::new(crate::config::config_path().display().to_string())
                     .size(11.0)
-                    .color(theme::INK_FAINT)
+                    .color(theme::ink_faint())
                     .monospace(),
             );
         });
         if self.cfg.settings != before {
+            if self.cfg.settings.theme != before.theme {
+                let palette = themes
+                    .iter()
+                    .find(|(n, _)| *n == self.cfg.settings.theme)
+                    .map(|(_, p)| *p)
+                    .unwrap_or_default();
+                theme::set_palette(palette);
+                theme::apply_style(ui.ctx());
+            }
             if self.cfg.settings.test_image != before.test_image {
                 // same path as the button in the title bar: drop the old
                 // picture and start the capture again
@@ -2545,9 +2621,9 @@ impl App {
             .exact_size(height)
             .frame(
                 egui::Frame::new()
-                    .fill(theme::PANEL)
+                    .fill(theme::panel())
                     .inner_margin(egui::Margin::symmetric(18, 12))
-                    .stroke(Stroke::new(1.0_f32, theme::LINE)),
+                    .stroke(Stroke::new(1.0_f32, theme::line())),
             )
             .show(root, |ui| {
                 ui.horizontal(|ui| {
@@ -2555,7 +2631,7 @@ impl App {
                     if let Some((text, at)) = self.notice.as_ref() {
                         if at.elapsed() < Duration::from_secs(8) {
                             ui.add_space(10.0);
-                            ui.label(RichText::new(text).size(12.0).color(theme::INK_DIM));
+                            ui.label(RichText::new(text).size(12.0).color(theme::ink_dim()));
                         }
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -2595,7 +2671,7 @@ impl App {
                                     egui::Align2::LEFT_CENTER,
                                     &name,
                                     theme::regular(12.0),
-                                    theme::INK_DIM,
+                                    theme::ink_dim(),
                                 );
                                 // the wire carries the colours in device order;
                                 // the tape shows them as the strip lies, so a
@@ -2629,7 +2705,7 @@ impl App {
         egui::CentralPanel::default()
             .frame(
                 egui::Frame::new()
-                    .fill(theme::WALL)
+                    .fill(theme::wall())
                     .inner_margin(egui::Margin::same(20)),
             )
             .show(root, |ui| {
@@ -2702,7 +2778,7 @@ impl App {
                     CornerRadius::same(8),
                     Color32::from_rgb(30, 33, 42),
                 );
-                painter.rect_filled(view.rect, CornerRadius::same(4), theme::MATTE);
+                painter.rect_filled(view.rect, CornerRadius::same(4), theme::matte());
                 if let Some(t) = self.texture.as_ref() {
                     painter.image(
                         t.id(),
@@ -2728,13 +2804,13 @@ impl App {
                     Vec2::new(view.rect.width().min(440.0), 150.0),
                 );
                 let mut child = ui.new_child(egui::UiBuilder::new().max_rect(card));
-                theme::card_with(&mut child, theme::PANEL, theme::LINE_HI, |ui| {
+                theme::card_with(&mut child, theme::panel(), theme::line_hi(), |ui| {
                     ui.label(
                         RichText::new(tr("Aufnahme gestoppt", "Capture stopped"))
                             .font(theme::semibold(14.0))
-                            .color(theme::CORAL),
+                            .color(theme::error()),
                     );
-                    ui.label(RichText::new(e).size(12.0).color(theme::INK_DIM));
+                    ui.label(RichText::new(e).size(12.0).color(theme::ink_dim()));
                     ui.add_space(4.0);
                     let mut use_test = false;
                     ui.horizontal(|ui| {
@@ -2766,7 +2842,7 @@ impl App {
                     &painter,
                     Pos2::new(view.rect.left() + 10.0, view.rect.bottom() - 32.0),
                     &status_text(&status).0,
-                    theme::AMBER,
+                    theme::accent(),
                 );
             }
             CaptureStatus::Running { .. } => {}
@@ -2783,7 +2859,8 @@ impl App {
                     "Create a zone on the right and drag it onto the picture.",
                 )
             };
-            let galley = painter.layout_no_wrap(text.to_owned(), theme::regular(13.0), theme::INK);
+            let galley =
+                painter.layout_no_wrap(text.to_owned(), theme::regular(13.0), theme::ink());
             let r =
                 Rect::from_center_size(view.rect.center(), galley.size() + Vec2::new(28.0, 18.0));
             painter.rect_filled(
@@ -2791,7 +2868,7 @@ impl App {
                 CornerRadius::same(theme::R_MD),
                 Color32::from_black_alpha(200),
             );
-            painter.galley(r.min + Vec2::new(14.0, 9.0), galley, theme::INK);
+            painter.galley(r.min + Vec2::new(14.0, 9.0), galley, theme::ink());
         }
         if !live {
             theme::chip(
@@ -2801,7 +2878,7 @@ impl App {
                     "Vorschau ruht im Hintergrund",
                     "Preview rests in background",
                 ),
-                theme::INK_DIM,
+                theme::ink_dim(),
             );
         }
     }
@@ -2830,7 +2907,7 @@ impl App {
                     if z.enabled {
                         base.gamma_multiply(if sel { 1.0 } else { 0.7 })
                     } else {
-                        theme::INK_FAINT
+                        theme::ink_faint()
                     },
                 ),
                 egui::StrokeKind::Inside,
@@ -2958,7 +3035,7 @@ impl App {
                     &painter,
                     Pos2::new(r.left() + 6.0, tag_y),
                     &label,
-                    theme::INK,
+                    theme::ink(),
                 );
             } else {
                 let badge = Rect::from_center_size(
@@ -3146,7 +3223,7 @@ impl eframe::App for App {
     }
 
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
-        theme::WALL.to_normalized_gamma_f32()
+        theme::wall().to_normalized_gamma_f32()
     }
 
     fn on_exit(&mut self) {
