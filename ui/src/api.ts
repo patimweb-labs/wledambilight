@@ -77,7 +77,7 @@ export interface Telemetry {
   sample_us: number;
   paused: boolean;
   devices: DeviceStatus[];
-  leds: [number, number, number][];
+  device_leds: [number, number, number][][];
   /** Eine Farbe je Zone, in der Reihenfolge der Konfiguration. */
   zone_colors: [number, number, number][];
 }

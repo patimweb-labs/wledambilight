@@ -168,3 +168,23 @@ export function removeZone(index: number) {
   state.config.zones.splice(index, 1);
   commit();
 }
+
+/**
+ * LED-Bereich jeder Zone auf ihrem Gerät: dieselbe Rechnung wie im Kern
+ * (`zone_colors`). Ohne Startindex rücken die Zonen eines Geräts aneinander.
+ */
+export function zoneRanges(): { start: number; count: number; label: string }[] {
+  const zones = state.config?.zones ?? [];
+  const cursor = new Map<string, number>();
+  return zones.map((zone) => {
+    const start = zone.offset ?? (cursor.get(zone.device) ?? 0);
+    if (zone.enabled && zone.offset === null) {
+      cursor.set(zone.device, start + zone.count);
+    }
+    return {
+      start,
+      count: zone.count,
+      label: zone.count > 1 ? `LED ${start}–${start + zone.count - 1}` : `LED ${start}`,
+    };
+  });
+}

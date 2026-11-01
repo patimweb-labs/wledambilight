@@ -1,4 +1,5 @@
 import { createApp } from "vue";
+import "@weppelmann/tokens-fonts";
 import "@weppelmann/tokens-css";
 import "@weppelmann/components/style.css";
 import "./base.css";

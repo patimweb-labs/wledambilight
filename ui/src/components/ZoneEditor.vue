@@ -13,6 +13,7 @@ const props = defineProps<{
   active: number;
   snap: boolean;
   colors: [number, number, number][];
+  ranges: { start: number; count: number; label: string }[];
 }>();
 const emit = defineEmits<{ "update:active": [index: number]; changed: [] }>();
 
@@ -64,8 +65,7 @@ function onUp() {
   drag = null;
 }
 
-// Pfeiltasten verschieben, mit Shift in großen Schritten. Der Fokus muss dafür
-// auf der Zone liegen; Klick setzt ihn (button-Element).
+// Pfeiltasten verschieben, mit Shift in großen Schritten.
 function nudge(event: KeyboardEvent, index: number) {
   const zone = props.zones[index];
   if (!zone) return;
@@ -83,7 +83,7 @@ function nudge(event: KeyboardEvent, index: number) {
 
 function style(zone: Zone, index: number) {
   const color = props.colors[index];
-  const lit = color && (color[0] + color[1] + color[2] > 6);
+  const lit = color && color[0] + color[1] + color[2] > 6;
   return {
     left: `${zone.x * 100}%`,
     top: `${zone.y * 100}%`,
@@ -110,7 +110,8 @@ function style(zone: Zone, index: number) {
       @pointerdown="start($event, i, 'move')"
       @keydown="nudge($event, i)"
     >
-      <span class="zone__name">{{ zone.name }}</span>
+      <span class="zone__num">{{ i + 1 }}</span>
+      <span class="zone__label">{{ zone.name }} · {{ ranges[i]?.label ?? "" }}</span>
       <span class="zone__handle" title="Größe ändern" @pointerdown.stop="start($event, i, 'resize')" />
     </button>
   </div>
@@ -120,7 +121,8 @@ function style(zone: Zone, index: number) {
 .editor {
   position: relative;
   aspect-ratio: 16 / 9;
-  width: 100%;
+  height: 100%;
+  width: auto;
   background: var(--wp-color-bg-input);
   border: var(--wp-size-border) solid var(--wp-color-border-strong);
   overflow: hidden;
@@ -137,17 +139,24 @@ function style(zone: Zone, index: number) {
   font-size: 10px;
   padding: 2px 4px;
   cursor: grab;
+  line-height: 1.4;
   text-align: left;
   overflow: hidden;
-  text-shadow: 0 1px 2px rgb(0 0 0 / 0.8);
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.85);
 }
 .zone:active { cursor: grabbing; }
 .zone.is-active { border-style: solid; border-width: 2px; }
 .zone:focus-visible { outline: var(--wp-size-focus) solid var(--wp-color-focus-ring); outline-offset: -2px; }
 .zone.is-off { opacity: 0.4; }
-.zone__name { pointer-events: none; }
+.zone__num {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 13px; height: 13px; margin-right: 4px;
+  background: var(--wp-color-accent-default); color: var(--wp-color-text-on-accent);
+  font-size: 9px; font-weight: 600;
+}
+.zone__label { pointer-events: none; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .zone__handle {
-  position: absolute; right: 0; bottom: 0; width: 12px; height: 12px;
+  position: absolute; right: 0; bottom: 0; width: 10px; height: 10px;
   background: var(--wp-color-accent-default); cursor: nwse-resize;
 }
 </style>

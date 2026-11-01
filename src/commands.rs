@@ -39,8 +39,8 @@ pub struct Telemetry {
     pub sample_us: u64,
     pub paused: bool,
     pub devices: Vec<DeviceState>,
-    /// Farben, die zuletzt auf die Leitung gingen (erstes Gerät, höchstens 512 Stück)
-    pub leds: Vec<[u8; 3]>,
+    /// Farben, die zuletzt je Gerät auf die Leitung gingen (höchstens 512 je Gerät)
+    pub device_leds: Vec<Vec<[u8; 3]>>,
     /// Eine Farbe je Zone, in der Reihenfolge der Konfiguration. So zeigt die
     /// Vorschau nicht die eingestellte Farbe, sondern die, die wirklich ankommt.
     pub zone_colors: Vec<[u8; 3]>,
@@ -99,12 +99,19 @@ fn telemetry(state: &AppState) -> Telemetry {
         .ok()
         .map(|v| v.clone())
         .unwrap_or_default();
-    let leds: Vec<[u8; 3]> = sent
-        .first()
-        .cloned()
-        .unwrap_or_default()
-        .into_iter()
-        .take(512)
+    // Ein Streifen je Gerät, in der Reihenfolge der Konfiguration.
+    let device_leds: Vec<Vec<[u8; 3]>> = cfg
+        .devices
+        .iter()
+        .enumerate()
+        .map(|(index, _)| {
+            sent.get(index)
+                .cloned()
+                .unwrap_or_default()
+                .into_iter()
+                .take(512)
+                .collect()
+        })
         .collect();
 
     let zone_colors = zone_colors(&cfg, &sent);
@@ -119,7 +126,7 @@ fn telemetry(state: &AppState) -> Telemetry {
         sample_us: stats.sample_us as u64,
         paused: shared.paused.load(Ordering::Relaxed),
         devices,
-        leds,
+        device_leds,
         zone_colors,
     }
 }

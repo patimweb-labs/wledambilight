@@ -18,12 +18,13 @@ const lib = (...p: string[]) => resolve(library, "packages", ...p);
 export default defineConfig({
   plugins: [vue()],
   clearScreen: false,
-  server: { port: 1420, strictPort: true, host: "127.0.0.1" },
+  server: { port: 1420, strictPort: true, host: "127.0.0.1", fs: { allow: [resolve(library), resolve(here)] } },
   resolve: {
     alias: [
       { find: /^@weppelmann\/components$/, replacement: lib("components/src/index.ts") },
       { find: /^@weppelmann\/components\/(.*)$/, replacement: lib("components/src/$1") },
       { find: /^@weppelmann\/icons$/, replacement: lib("icons/src/index.ts") },
+      { find: /^@weppelmann\/tokens-fonts$/, replacement: lib("tokens/dist/css/fonts.css") },
       { find: /^@weppelmann\/tokens-css$/, replacement: lib("tokens/dist/css/vars.css") },
       { find: /^@weppelmann\/tokens$/, replacement: lib("tokens/dist/json/tokens.json") },
     ],
