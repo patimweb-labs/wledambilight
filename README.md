@@ -13,7 +13,9 @@ Govee lights and Nanoleaf panels – the light behind your monitor or TV and
 on your desk follows the picture. Runs on **Linux, Windows and macOS**,
 entirely in your local network: no account, no cloud.
 
-![WLED Ambilight with four edge zones and a free zone on the preview](docs/screenshot.png)
+![WLED Ambilight: capture, live LED strip and device states](docs/screenshot.png)
+
+![Zones on the screen, filled with the colours that actually leave the app](docs/screenshot-zones.png)
 
 ## Features
 
@@ -39,8 +41,7 @@ entirely in your local network: no account, no cloud.
 - **Frame rate** 24–144 fps globally, plus a cap per device.
 - **Test picture** – instead of the screen, a rainbow running left → right
   with a white bar, a white frame and a centre cross: check zones, direction
-  and colours without handing out the screen. Toggle in the title bar (“Test
-  picture”, next to the status) and on the *App* tab, or `AMBILIGHT_DEMO=1`.
+  and colours without handing out the screen. Toggle on the *Overview* tab, or start with `AMBILIGHT_STATS=1`.
   Once switched to the screen the permission stays for the session, so
   switching back and forth is instant.
 - **Live view** – the preview shows the light each zone throws onto the wall,
@@ -179,7 +180,7 @@ is not notarised, macOS says the app “cannot be checked”: right-click the ap
 | Nudge the selected zone | arrow keys, with <kbd>Shift</kbd> in big steps |
 | Delete the selected zone | <kbd>Delete</kbd> |
 | Deselect | <kbd>Esc</kbd> |
-| Pause / resume | button in the title bar or the tray menu (the LEDs keep their colour) |
+| Pause / resume | button on the *Overview* tab or in the tray menu (the LEDs keep their colour) |
 | Hide to tray | close the window; quit from the tray menu |
 
 ### Picture settings
@@ -322,21 +323,47 @@ macOS the window is excluded from the capture instead.
 | Linux: wrong monitor | *App → Choose another display* asks the portal again. |
 | macOS: black preview / error | Grant *Screen Recording* permission and restart the app (macOS rule). After an update an unsigned build may need the permission again. |
 
+## How it is built
+
+The window is a web application (Vue 3 + TypeScript), delivered by
+[Tauri 2](https://tauri.app). Rust keeps the work: screen capture, sampling,
+device output, configuration. The interface talks to it through a small command
+layer — no second copy of the truth, no logic in the window.
+
+The components come from a shared library used by all of my applications
+(`weppelmann-ui`: atoms, molecules, organisms, three themes). It is not
+published; the build expects it next to this repository.
+
+```
+src/            Rust core: capture, sampler, engine, output, config, commands
+src/commands.rs the contract between window and core
+ui/             Vue application (views, zone editor, LED strip)
+packaging/      Flatpak, .deb/.rpm, Windows installer, macOS bundle
+```
+
 ## Building from source
 
-Requirements: [Rust](https://rustup.rs/) 1.90 or newer.
+Requirements: [Rust](https://rustup.rs/) 1.90 or newer, [Node](https://nodejs.org/) 20 or newer,
+and the Tauri system libraries.
 
-- **Linux:** at runtime `gst-launch-1.0` with `pipewiresrc` and a running
-  xdg-desktop-portal. No extra build dependencies.
-- **Windows:** the MSVC toolchain (Visual Studio Build Tools).
+- **Linux:** `webkit2gtk-4.1`, `libayatana-appindicator3`, `librsvg2`
+  (development packages); at runtime `gst-launch-1.0` with `pipewiresrc` and a
+  running xdg-desktop-portal.
+- **Windows:** WebView2 (preinstalled on Windows 11) and the MSVC toolchain.
 - **macOS:** Xcode or the Command Line Tools (13.0 SDK or newer).
 
 ```sh
 git clone https://github.com/Smotherer007/wledambilight.git
 cd wledambilight
+npm install                 # tooling and interface
+npm --prefix ui run build   # the window is needed before the Rust build
 cargo run --release
 cargo test
 ```
+
+For development, `npm --prefix ui run dev` (port 1420) plus
+`cargo run` gives live reload of the window. `npm run tauri build` produces the
+bundles.
 
 Packaging (Flatpak, `.deb`, `.rpm`, installer, `.dmg`) runs in GitHub
 Actions; see [CONTRIBUTING.md](CONTRIBUTING.md) for the release process and

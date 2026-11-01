@@ -1,0 +1,18 @@
+{
+  "name": "wled-ambilight-workspace",
+  "private": true,
+  "version": "0.3.0",
+  "type": "module",
+  "workspaces": [
+    "ui"
+  ],
+  "scripts": {
+    "dev": "npm --prefix ui run dev",
+    "build": "npm --prefix ui run build",
+    "typecheck": "npm --prefix ui run typecheck",
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.12.4"
+  }
+}

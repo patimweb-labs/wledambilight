@@ -3,21 +3,27 @@
 ## Development
 
 ```sh
+npm install                     # interface tooling (Vue, Vite, Tauri CLI)
+npm --prefix ui run build       # the window must exist before the Rust build
 cargo run                       # GUI
-AMBILIGHT_DEMO=1 cargo run      # animated test picture instead of the screen
+npm --prefix ui run dev         # window with live reload on port 1420
 AMBILIGHT_STATS=1 cargo run     # timing / flicker statistics on stderr
 cargo test
 cargo clippy --all-targets
 cargo fmt
 ```
 
+The window is a Vue application in `ui/`. Rust exposes a command layer
+(`src/commands.rs`); the interface never talks to the pipeline directly.
+
 ### Project layout
 
 | Path | Purpose |
 | --- | --- |
-| `src/main.rs` | command line, window setup, headless mode |
-| `src/app.rs` | the window: device list, preview with zones, inspector, output bar |
-| `src/theme.rs`, `src/icons.rs` | design tokens, fonts, custom widgets, painted icons |
+| `src/main.rs` | command line, Tauri setup, tray, headless mode |
+| `src/commands.rs` | the contract between window and core |
+| `src/state.rs` | shared state: pipeline, config |
+| `ui/` | the window: views, zone editor, LED strip (Vue) |
 | `src/i18n.rs` | German/English switch (`tr("Deutsch", "English")`) |
 | `src/worker.rs` | pipeline thread: capture → engine on a fixed tick |
 | `src/engine.rs` | median, smoothing, grading, per-device rate limits, sending |

@@ -1,31 +1,22 @@
-// SPDX-License-Identifier: GPL-3.0-only
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Patrick Weppelmann
 
 // No console window next to the GUI on Windows (release builds).
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
-//! WLED Ambilight - screen capture to WLED, on Linux, Windows and macOS.
+//! WLED Ambilight — screen capture to WLED, on Linux, Windows and macOS.
 //!
-//! This program is free software: you can redistribute it and/or modify it
-//! under the terms of the GNU General Public License version 3 as published by
-//! the Free Software Foundation. It is distributed WITHOUT ANY WARRANTY; see
-//! the LICENSE file for details.
+//! The window is a web application (Vue). This file starts the pipeline, the tray
+//! and the command layer; the user interface lives in `ui/`.
 
-mod app;
-mod capture;
-mod config;
-mod discovery;
-mod engine;
-mod i18n;
-mod icons;
-mod output;
-mod sampler;
-mod theme;
-mod tray;
-mod wled;
-mod worker;
-
+use std::sync::atomic::Ordering;
 use std::time::Duration;
+
+use tauri::{Emitter, Manager};
+
+use wled_ambilight::config::{self, Config};
+use wled_ambilight::state::AppState;
+use wled_ambilight::{commands, i18n, tray, worker};
 
 /// Reverse-DNS id: Wayland app id, desktop file, Flatpak, icon name.
 pub const APP_ID: &str = "io.github.smotherer007.WledAmbilight";
@@ -45,7 +36,7 @@ Options:
 ";
 
 fn headless() -> ! {
-    let mut cfg = config::Config::load();
+    let mut cfg = Config::load();
     i18n::init(&cfg.settings.language);
     if cfg.devices.is_empty() {
         eprintln!(
@@ -54,7 +45,6 @@ fn headless() -> ! {
         );
     }
     let pipeline = worker::Pipeline::start(&cfg);
-    // keep the portal token in the config file once the portal handed one out
     loop {
         std::thread::sleep(Duration::from_secs(2));
         let token = pipeline.shared.restore_token();
@@ -65,15 +55,25 @@ fn headless() -> ! {
     }
 }
 
-fn window_icon() -> egui::IconData {
-    egui::IconData {
-        rgba: include_bytes!("../assets/icons/app-64.rgba").to_vec(),
-        width: 64,
-        height: 64,
-    }
+/// Schickt Messwerte an die Oberfläche, solange das Fenster offen ist.
+///
+/// Ein Ereignis statt Polling: die Oberfläche zeichnet, was ankommt, und fragt
+/// nichts selbst ab. 200 ms sind schnell genug für Zähler und die LED-Leiste.
+fn start_telemetry(handle: tauri::AppHandle) {
+    std::thread::Builder::new()
+        .name("telemetry".into())
+        .spawn(move || loop {
+            std::thread::sleep(Duration::from_millis(200));
+            let state = handle.state::<AppState>();
+            let telemetry = commands::telemetry_now(state);
+            if handle.emit("telemetry", telemetry).is_err() {
+                break; // Fenster weg: Thread beenden
+            }
+        })
+        .ok();
 }
 
-fn main() -> eframe::Result<()> {
+fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let mut run_headless = false;
     let mut minimized = false;
@@ -83,20 +83,20 @@ fn main() -> eframe::Result<()> {
             "--headless" => run_headless = true,
             "--minimized" => minimized = true,
             "--config" => {
-                let Some(p) = args.get(i + 1) else {
+                let Some(path) = args.get(i + 1) else {
                     eprintln!("--config needs a file name");
                     std::process::exit(2);
                 };
-                config::set_config_path(p.into());
+                config::set_config_path(path.into());
                 i += 1;
             }
             "-V" | "--version" => {
                 println!("wled-ambilight {VERSION}");
-                return Ok(());
+                return;
             }
             "-h" | "--help" => {
                 print!("{HELP}");
-                return Ok(());
+                return;
             }
             // older macOS passes a process serial number when started from Finder
             other if other.starts_with("-psn_") => {}
@@ -111,18 +111,48 @@ fn main() -> eframe::Result<()> {
         headless();
     }
 
-    let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_inner_size([1400.0, 880.0])
-            .with_min_inner_size([1040.0, 660.0])
-            .with_icon(window_icon())
-            .with_title("WLED Ambilight")
-            .with_app_id(APP_ID),
-        ..Default::default()
-    };
-    eframe::run_native(
-        "wled-ambilight",
-        options,
-        Box::new(move |cc| Ok(Box::new(app::App::new(cc, minimized)))),
-    )
+    let cfg = Config::load();
+    i18n::init(&cfg.settings.language);
+
+    tauri::Builder::default()
+        .manage(AppState::new(&cfg))
+        .invoke_handler(tauri::generate_handler![
+            commands::snapshot,
+            commands::telemetry_now,
+            commands::save_config,
+            commands::restart_capture,
+            commands::forget_permission,
+            commands::set_paused,
+            commands::monitors,
+            commands::discover,
+            commands::zone_preset,
+            commands::device_template,
+        ])
+        .setup(move |app| {
+            tray::install(app)?;
+            if minimized {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.hide();
+                }
+            }
+            start_telemetry(app.handle().clone());
+            Ok(())
+        })
+        .on_window_event(|window, event| {
+            // Schließen legt das Fenster nur weg: die Pipeline und das
+            // Taskleisten-Symbol bleiben, sonst wäre der Autostart sinnlos.
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                let _ = window.hide();
+            }
+        })
+        .run(tauri::generate_context!())
+        .expect("error while running WLED Ambilight");
+}
+
+/// Ungenutzt, aber absichtlich vorhanden: erzwingt die Bindung von `Ordering`
+/// in diesem Modul, damit der Tray-Code beim Umbau nicht still bricht.
+#[allow(dead_code)]
+fn _ordering_marker() -> Ordering {
+    Ordering::Relaxed
 }

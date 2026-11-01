@@ -1,0 +1,36 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "jsx": "preserve",
+    "noEmit": true,
+    "types": [
+      "node",
+      "vite/client"
+    ],
+    "baseUrl": ".",
+    "paths": {
+      "@weppelmann/components": [
+        "../../weppelmann-ui/packages/components/src/index.ts"
+      ],
+      "@weppelmann/icons": [
+        "../../weppelmann-ui/packages/icons/src/index.ts"
+      ],
+      "@weppelmann/tokens": [
+        "../../weppelmann-ui/packages/tokens/dist/json/tokens.json"
+      ]
+    }
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.vue",
+    "vite.config.ts"
+  ]
+}

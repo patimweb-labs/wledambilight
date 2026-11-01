@@ -12,6 +12,9 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  # Die Oberfläche ist eine Web-Anwendung. Sie muss vor dem Rust-Build fertig sein,
+  # weil Tauri die Dateien in das Programm einbettet.
+  WPM_UI_DIR: ${{ github.workspace }}/weppelmann-ui
 
 jobs:
   fmt:
@@ -39,12 +42,39 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
+      # Die geteilte Komponentenbibliothek liegt in einem eigenen, privaten
+      # Repository. Ohne diesen Schritt fehlen Tokens und Komponenten. Der
+      # Workflow braucht dafür das Secret WPM_UI_TOKEN (Repo-Lese-Recht).
+      - name: Oberflächen-Bibliothek
+        uses: actions/checkout@v7
+        with:
+          repository: Smotherer007/weppelmann-ui
+          path: weppelmann-ui
+          token: ${{ secrets.WPM_UI_TOKEN }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
-      # Warnings are shown as annotations but do not fail the build: every new
-      # Rust release brings new lints. Real bugs (correctness) still fail.
+      - name: Systembibliotheken (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libwebkit2gtk-4.1-dev libayatana-appindicator3-dev \
+            librsvg2-dev patchelf libgtk-3-dev
+      - name: Tokens bauen
+        working-directory: weppelmann-ui
+        run: |
+          npm install --no-audit --no-fund
+          npm run -w @weppelmann/tokens build
+      - name: Oberfläche bauen
+        run: |
+          npm install --no-audit --no-fund
+          npm --prefix ui run build
+      # Warnungen erscheinen als Hinweis, sie brechen den Bau nicht: jede neue
+      # Rust-Version bringt neue Lints. Echte Fehler (correctness) brechen ab.
       - name: Clippy
         run: cargo clippy --all-targets --locked -- -D clippy::correctness
       - name: Tests

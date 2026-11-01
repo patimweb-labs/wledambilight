@@ -5,7 +5,7 @@ edition = "2021"
 rust-version = "1.90"
 description = "Lightweight ambilight: captures the screen, samples freely placed zones and streams the colours to WLED, OpenRGB, Razer Chroma, Govee and Nanoleaf."
 authors = ["Patrick Weppelmann <patrick.weppelmann@neoimpulse.de>"]
-license = "GPL-3.0-only"
+license = "GPL-3.0-or-later"
 repository = "https://github.com/Smotherer007/wledambilight"
 homepage = "https://github.com/Smotherer007/wledambilight"
 readme = "README.md"
@@ -13,40 +13,51 @@ keywords = ["wled", "ambilight", "openrgb", "govee", "nanoleaf"]
 categories = ["multimedia", "gui"]
 publish = false
 
+# Der Kern (Aufnahme, Sampling, Ausgabe, Konfiguration) ist eine Bibliothek, damit
+# Tests und die Oberfläche (Tauri) dieselbe Logik benutzen. Die Oberfläche selbst
+# ist eine Web-Anwendung; Rust liefert nur Befehle und Ereignisse.
+[features]
+# Setzt Tauri in den Auslieferungsmodus: die gebaute Oberfläche wird eingebettet,
+# statt den Entwicklungsserver zu erwarten.
+custom-protocol = ["tauri/custom-protocol"]
+
+[lib]
+name = "wled_ambilight"
+path = "src/lib.rs"
+
 [[bin]]
 name = "wled-ambilight"
 path = "src/main.rs"
 
 [dependencies]
 anyhow = "1"
-eframe = "0.37"
-egui = "0.37"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 mdns-sd = "0.21"
 dirs = "7"
 sys-locale = "0.3"
-# HTTP for Razer Chroma (localhost) and Nanoleaf (LAN); no TLS needed
+# HTTP für Razer Chroma (localhost) und Nanoleaf (LAN); kein TLS nötig
 ureq = { version = "3", default-features = false, features = ["json"] }
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
 
-# Linux: xdg-desktop-portal + PipeWire (via GStreamer) and a StatusNotifierItem tray
+# Linux: xdg-desktop-portal + PipeWire (über GStreamer)
 [target.'cfg(target_os = "linux")'.dependencies]
 ashpd = { version = "0.13", features = ["screencast"] }
 libc = "0.2"
 tokio = { version = "1", features = ["rt", "macros", "time"] }
-ksni = { version = "0.3.6", features = ["blocking"] }
 
-# Windows: Windows Graphics Capture + native tray
+# Windows: Windows Graphics Capture
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-capture = "2"
-tray-icon = "0.26"
 raw-window-handle = "0.6"
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
 
-# macOS: ScreenCaptureKit + native menu bar item
+# macOS: ScreenCaptureKit
 [target.'cfg(target_os = "macos")'.dependencies]
 screencapturekit = "11"
-tray-icon = "0.26"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
 
 [target.'cfg(target_os = "windows")'.build-dependencies]
 winresource = "0.1"
@@ -68,7 +79,7 @@ extended-description = """\
 Captures the screen through the XDG desktop portal (PipeWire), samples freely \
 placed zones and streams the colours to WLED, OpenRGB, Govee and Nanoleaf \
 devices in the local network."""
-depends = "$auto, gstreamer1.0-tools, gstreamer1.0-pipewire, gstreamer1.0-plugins-base, xdg-desktop-portal"
+depends = "$auto, gstreamer1.0-tools, gstreamer1.0-pipewire, gstreamer1.0-plugins-base, xdg-desktop-portal, webkit2gtk4.1"
 section = "video"
 priority = "optional"
 assets = [
@@ -79,22 +90,3 @@ assets = [
     ["assets/icons/icon-256.png", "usr/share/icons/hicolor/256x256/apps/io.github.smotherer007.WledAmbilight.png", "644"],
     ["README.md", "usr/share/doc/wled-ambilight/README.md", "644"],
 ]
-
-[package.metadata.generate-rpm]
-name = "wled-ambilight"
-license = "GPL-3.0-only"
-summary = "Ambilight for WLED (screen capture to DDP)"
-assets = [
-    { source = "target/release/wled-ambilight", dest = "/usr/bin/wled-ambilight", mode = "755" },
-    { source = "packaging/linux/io.github.smotherer007.WledAmbilight.desktop", dest = "/usr/share/applications/io.github.smotherer007.WledAmbilight.desktop", mode = "644" },
-    { source = "packaging/linux/io.github.smotherer007.WledAmbilight.metainfo.xml", dest = "/usr/share/metainfo/io.github.smotherer007.WledAmbilight.metainfo.xml", mode = "644" },
-    { source = "assets/icon.svg", dest = "/usr/share/icons/hicolor/scalable/apps/io.github.smotherer007.WledAmbilight.svg", mode = "644" },
-    { source = "assets/icons/icon-256.png", dest = "/usr/share/icons/hicolor/256x256/apps/io.github.smotherer007.WledAmbilight.png", mode = "644" },
-    { source = "LICENSE", dest = "/usr/share/licenses/wled-ambilight/LICENSE", mode = "644", doc = true },
-]
-
-[package.metadata.generate-rpm.requires]
-gstreamer1-plugins-base = "*"
-gstreamer1-plugins-good = "*"
-pipewire-gstreamer = "*"
-xdg-desktop-portal = "*"

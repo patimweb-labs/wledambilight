@@ -265,7 +265,7 @@ mod tests {
     #[test]
     fn the_capture_runs_without_a_screen() {
         // the whole point of the test picture: no portal, no permission
-        let mut cap = super::super::ScreenCapture::start(CaptureOptions {
+        let cap = super::super::ScreenCapture::start(CaptureOptions {
             width: 160,
             fps: 30,
             monitor: 0,

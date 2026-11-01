@@ -1,14 +1,15 @@
-// SPDX-License-Identifier: GPL-3.0-only
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Patrick Weppelmann
 
-//! Embeds the icon and version info into the Windows executable.
+//! Tauri-Kontext (Berechtigungen, Icons) und Windows-Versionsinformationen.
 fn main() {
     println!("cargo:rerun-if-changed=assets/icons/app.ico");
+    println!("cargo:rerun-if-changed=tauri.conf.json");
+    println!("cargo:rerun-if-changed=capabilities/default.json");
 
-    // macOS: ScreenCaptureKit is partly written in Swift. Its build script sets
-    // the rpath to the system Swift runtime, but Cargo does not pass link args
-    // of dependencies on to our binary - without this the app (and the tests)
-    // abort at launch with "Library not loaded: @rpath/libswift_Concurrency.dylib".
+    // macOS: ScreenCaptureKit ist teilweise Swift. Das Build-Skript der Abhängigkeit
+    // setzt den rpath auf die Swift-Laufzeit, aber Cargo reicht Link-Argumente von
+    // Abhängigkeiten nicht an unser Binärziel weiter.
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") {
         println!("cargo:rustc-link-arg=-Wl,-rpath,/usr/lib/swift");
     }
@@ -29,4 +30,6 @@ fn main() {
             }
         }
     }
+
+    tauri_build::build();
 }

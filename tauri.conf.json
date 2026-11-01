@@ -1,0 +1,42 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "WLED Ambilight",
+  "version": "0.3.0",
+  "identifier": "io.github.smotherer007.WledAmbilight",
+  "build": {
+    "beforeDevCommand": "npm --prefix ui run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm --prefix ui run build",
+    "frontendDist": "ui/dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "WLED Ambilight",
+        "width": 1180,
+        "height": 820,
+        "minWidth": 980,
+        "minHeight": 620,
+        "resizable": true,
+        "backgroundColor": "#060A12"
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "deb",
+      "rpm",
+      "appimage"
+    ],
+    "icon": [
+      "assets/icons/icon-32.png",
+      "assets/icons/icon-128.png",
+      "assets/icons/icon-256.png"
+    ]
+  }
+}

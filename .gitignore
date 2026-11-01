@@ -2,5 +2,11 @@
 /build-flatpak
 /.flatpak-builder
 /dist
+/ui/dist
+/ui/node_modules
+/node_modules
+/ui/.vite
 packaging/flatpak/.flatpak-cargo-generator.py
+/gen
+*.tsbuildinfo
 .DS_Store

@@ -1,42 +1,69 @@
-# Flatpak manifest for WLED Ambilight.
+# Flatpak-Manifest für WLED Ambilight (Tauri-Oberfläche).
 #
-# Local build (from the repository root):
+# Lokal bauen (aus dem Projektwurzel):
 #   bash packaging/flatpak/update-cargo-sources.sh
 #   flatpak-builder --user --install --force-clean build-flatpak \
 #       packaging/flatpak/io.github.smotherer007.WledAmbilight.yml
 #
-# For Flathub, replace the `dir` source below with the git tag of a release
-# (see packaging/flatpak/README.md).
+# Bauart: Rust und Node bauen im Sandkasten. Die Oberfläche ist eine
+# Vue-Anwendung; sie wird vor dem Rust-Build erzeugt (`ui/dist`), weil Tauri die
+# Dateien einbettet.
+#
+# ACHTUNG, ungeprüft: Die Komponentenbibliothek liegt in einem eigenen Repository
+# (weppelmann-ui). Der Bau erwartet sie als Ordner `weppelmann-ui` neben diesem
+# Projekt (Quelle unten) oder als npm-Paket aus einem privaten Registry. Für
+# Flathub muss die Quelle auf einen Git-Tag zeigen statt auf einen lokalen Pfad.
 id: io.github.smotherer007.WledAmbilight
-runtime: org.freedesktop.Platform
-runtime-version: '25.08'
-sdk: org.freedesktop.Sdk
+runtime: org.gnome.Platform
+runtime-version: '51'
+sdk: org.gnome.Sdk
 sdk-extensions:
   - org.freedesktop.Sdk.Extension.rust-stable
+  - org.freedesktop.Sdk.Extension.node22
 command: wled-ambilight
 
 finish-args:
-  # window (Wayland first, X11 as fallback) + GPU
+  # Fenster (Wayland zuerst, X11 als Rückfall), GPU für die Darstellung.
   - --socket=wayland
   - --socket=fallback-x11
   - --share=ipc
   - --device=dri
-  # UDP/HTTP to the WLED devices, mDNS discovery
+  # UDP/HTTP zu den Geräten, mDNS-Suche.
   - --share=network
-  # tray icon
+  # Taskleisten-Symbol.
   - --talk-name=org.kde.StatusNotifierWatcher
-  # Screen capture goes through the ScreenCast portal (no extra permission).
+  # Bildschirmaufnahme läuft über das ScreenCast-Portal (kein Zusatzrecht).
+  - --talk-name=org.freedesktop.portal.Desktop
 
 build-options:
-  append-path: /usr/lib/sdk/rust-stable/bin
+  append-path: /usr/lib/sdk/rust-stable/bin:/usr/lib/sdk/node22/bin
   env:
     CARGO_HOME: /run/build/wled-ambilight/cargo
     CARGO_NET_OFFLINE: 'true'
+    WPM_UI_DIR: /run/build/weppelmann-ui
 
 modules:
+  # Die geteilte Oberflächen-Bibliothek: Tokens werden hier gebaut, die
+  # Komponenten liest Vite direkt aus den Quellen.
+  - name: weppelmann-ui
+    buildsystem: simple
+    build-commands:
+      - npm ci --no-audit --no-fund
+      - npm run -w @weppelmann/tokens build
+    sources:
+      - type: dir
+        path: ../../../weppelmann-ui
+        skip:
+          - node_modules
+          - "**/node_modules"
+          - "**/dist"
+
   - name: wled-ambilight
     buildsystem: simple
     build-commands:
+      - npm ci --no-audit --no-fund
+      - npm --prefix ui ci --no-audit --no-fund
+      - npm --prefix ui run build
       - cargo --offline fetch --manifest-path Cargo.toml --verbose
       - cargo --offline build --release --locked --verbose
       - install -Dm755 target/release/wled-ambilight ${FLATPAK_DEST}/bin/wled-ambilight
@@ -51,4 +78,6 @@ modules:
           - target
           - build-flatpak
           - .flatpak-builder
+          - ui/node_modules
+          - ui/dist
       - cargo-sources.json

@@ -13,7 +13,9 @@ Chroma), Govee-Leuchten und Nanoleaf-Panels – das Licht hinter Monitor oder
 Fernseher und auf dem Schreibtisch folgt dem Bild. Läuft unter **Linux, Windows
 und macOS**, komplett im lokalen Netz: kein Konto, keine Cloud.
 
-![WLED Ambilight mit vier Kantenzonen und einer freien Zone in der Vorschau](docs/screenshot-de.png)
+![WLED Ambilight: Aufnahme, LED-Leiste und Gerätestatus](docs/screenshot.png)
+
+![Zonen auf dem Bildschirm, gefüllt mit den Farben, die wirklich rausgehen](docs/screenshot-zones.png)
 
 ## Funktionen
 

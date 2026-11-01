@@ -77,7 +77,14 @@
   <releases>
     <release version="0.4.0" date="2026-10-20"><!-- x-release-please-version -->
       <description>
-        <p>First public release: Linux, Windows and macOS.</p>
+        <p>New window as a web application (Vue), delivered by Tauri. Capture,
+        sampling and output stay in the Rust core.</p>
+        <ul>
+          <li>Zones are still dragged and resized freely, now with keyboard nudging
+          and presets for the four edges.</li>
+          <li>The preview shows, per zone, the colour that actually leaves the app.</li>
+          <li>Three themes: dark, light, monochrome.</li>
+        </ul>
       </description>
     </release>
   </releases>
