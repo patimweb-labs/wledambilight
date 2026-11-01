@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.4.0](https://github.com/patimweb-labs/wledambilight/compare/v0.3.0...v0.4.0) (2026-11-01)
+
+
+### Features
+
+* test picture instead of the screen ([664e11c](https://github.com/patimweb-labs/wledambilight/commit/664e11cefefe641c5d0ab408d015f05406658b46))
+* the LED tape shows the strip as it lies, with an LED 0 tag ([4dc4c84](https://github.com/patimweb-labs/wledambilight/commit/4dc4c8475e42a82ba7c10feabbbb711d821af3d6))
+* themes at runtime, Crosspoint look as the default ([cd09647](https://github.com/patimweb-labs/wledambilight/commit/cd0964713c18b9e75275e08e4974fe711c3277c4))
+
+
+### Bug fixes
+
+* change the resolution without a new portal session ([5aad2ea](https://github.com/patimweb-labs/wledambilight/commit/5aad2eae13381fcb864ba4d903fed8a6ddd96e95))
+* move a zone's LED block and split only that zone ([c6c62ed](https://github.com/patimweb-labs/wledambilight/commit/c6c62ed047148b5ca69fc951c81908a0351ee54f))
+* switch test picture and screen back and forth instantly ([33f2110](https://github.com/patimweb-labs/wledambilight/commit/33f2110cb761ae3de9f8a63de42588b018503ef3))
+* the up/down arrows of the zone list were dead ([11a9a24](https://github.com/patimweb-labs/wledambilight/commit/11a9a24e0e30cd27c0941ff1c8fadaba68ea2e19))
+
 ## [0.3.0](https://github.com/Smotherer007/wledambilight/compare/v0.2.0...v0.3.0) (2026-10-20)
 
 
