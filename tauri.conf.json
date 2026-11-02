@@ -14,10 +14,10 @@
       {
         "label": "main",
         "title": "WLED Ambilight",
-        "width": 1180,
-        "height": 820,
-        "minWidth": 980,
-        "minHeight": 620,
+        "width": 1400,
+        "height": 880,
+        "minWidth": 1040,
+        "minHeight": 660,
         "resizable": true,
         "backgroundColor": "#060A12"
       }

@@ -19,6 +19,8 @@ export const state = reactive({
 
 /** Aktuelles Bild der Aufnahme als data-URL (JPEG). */
 export const preview = ref<string | null>(null);
+/** Wie viele Vorschaubilder pro Sekunde wirklich ankommen. */
+export const previewFps = ref(0);
 
 export function t(key: Parameters<ReturnType<typeof translator>>[0]): string {
   return translator(state.config?.settings.language ?? "auto")(key);
@@ -45,16 +47,27 @@ export async function init() {
     await listen<Telemetry>("telemetry", (event) => {
       state.telemetry = event.payload;
     });
-    // Vorschau getrennt von den Messwerten. 90 ms (~11 Bilder/s) sind flüssig
-    // genug, um Bewegung zu sehen, und deutlich billiger als ein Videostrom.
-    window.setInterval(async () => {
+    // Vorschau: selbsttaktend. Das naechste Bild wird erst nach dem letzten
+    // angefordert — bei einem festen Intervall stauen sich Anfragen, sobald ein
+    // Bild laenger braucht, und die Anzeige springt.
+    let received = 0;
+    window.setInterval(() => {
+      previewFps.value = received;
+      received = 0;
+    }, 1000);
+    const pump = async () => {
       try {
-        const frame = await invoke<string | null>("preview_frame");
-        if (frame) preview.value = frame;
+        const frame = await invoke<string | null>("preview_frame", { maxWidth: 480 });
+        if (frame) {
+          preview.value = frame;
+          received += 1;
+        }
       } catch {
-        /* Fenster noch nicht bereit: beim nächsten Takt erneut versuchen */
+        /* Fenster noch nicht bereit */
       }
-    }, 90);
+      window.setTimeout(pump, 25);
+    };
+    pump();
   } catch (error) {
     state.error = String(error);
   }

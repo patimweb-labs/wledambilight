@@ -334,14 +334,21 @@ pub async fn list_openrgb(host: String, port: u16) -> Result<Vec<FoundDevice>, S
 /// groß, Messwerte klein. So bleibt die Telemetrie schnell, und die Vorschau
 /// kann gebremst werden, ohne dass Zähler und LED-Leiste darunter leiden.
 #[tauri::command]
-pub fn preview_frame(state: State<'_, AppState>) -> Option<String> {
+pub fn preview_frame(state: State<'_, AppState>, max_width: Option<u32>) -> Option<String> {
     let frame = state.shared().frame.lock().ok()?.clone();
     if frame.w == 0 || frame.h == 0 || frame.data.len() < (frame.w * frame.h * 3) as usize {
         return None;
     }
-    let image = image::RgbImage::from_raw(frame.w, frame.h, frame.data.to_vec())?;
+    let mut image = image::RgbImage::from_raw(frame.w, frame.h, frame.data.to_vec())?;
+    // Die Vorschau ist ein Bild zum Zonen setzen, kein Videobild: 480 px Breite
+    // reichen, kosten aber ein Viertel der Rechenzeit und Bandbreite von 960.
+    let limit = max_width.unwrap_or(480).max(64);
+    if image.width() > limit {
+        let height = (image.height() as f32 * limit as f32 / image.width() as f32) as u32;
+        image = image::imageops::resize(&image, limit, height.max(1), image::imageops::FilterType::Triangle);
+    }
     let mut jpeg = Vec::new();
-    let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpeg, 70);
+    let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpeg, 72);
     encoder.encode_image(&image).ok()?;
     Some(format!(
         "data:image/jpeg;base64,{}",

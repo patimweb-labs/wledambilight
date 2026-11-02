@@ -1,8 +1,13 @@
 <script setup lang="ts">
 // Mitte: der Bildschirm mit den Zonen. Diese Fläche ist das Herz der App —
 // hier wird gezogen, geskaliert und gesehen, was ankommt.
-import { computed } from "vue";
-import { commit, preview, state, t, zoneLeds, zoneRanges } from "../store";
+//
+// Die Größe der Vorschau wird gerechnet, nicht dem CSS überlassen: der Kasten
+// nimmt die größtmögliche Fläche im Seitenverhältnis der Aufnahme ein und wird
+// mittig gesetzt. Damit quetscht sich weder Testbild noch Stream, und die Zonen
+// liegen immer genau auf dem Bild.
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
+import { commit, preview, previewFps, state, t, zoneLeds, zoneRanges } from "../store";
 import ZoneEditor from "./ZoneEditor.vue";
 
 const props = defineProps<{ active: number }>();
@@ -15,8 +20,37 @@ const screen = computed(() => state.telemetry?.screen ?? [0, 0]);
 const dims = computed(() => state.telemetry?.dims ?? [0, 0]);
 const camera = computed(() => state.telemetry?.capture ?? "idle");
 
-// Lineal: die LEDs der gewaehlten Zone in ihrer Reihenfolge auf dem Streifen.
-// Zeigt auf einen Blick, ob Laenge, Richtung und Anzahl zur Zone passen.
+// Seitenverhältnis der Aufnahme (Puffer), Vorgabe 16:9.
+const aspect = computed(() => {
+  const [w, h] = dims.value;
+  return w > 0 && h > 0 ? w / h : 16 / 9;
+});
+
+const stage = ref<HTMLElement | null>(null);
+const box = reactive({ width: 0, height: 0 });
+
+function fit() {
+  const element = stage.value;
+  if (!element) return;
+  const availableWidth = element.clientWidth;
+  const availableHeight = element.clientHeight;
+  if (availableWidth <= 0 || availableHeight <= 0) return;
+  const width = Math.min(availableWidth, availableHeight * aspect.value);
+  box.width = Math.max(1, Math.floor(width));
+  box.height = Math.max(1, Math.floor(width / aspect.value));
+}
+
+let observer: ResizeObserver | null = null;
+onMounted(() => {
+  observer = new ResizeObserver(fit);
+  if (stage.value) observer.observe(stage.value);
+  fit();
+});
+onBeforeUnmount(() => observer?.disconnect());
+// Andere Aufnahmebreite → anderes Seitenverhältnis → neu einpassen.
+watch(aspect, fit);
+
+// Lineal: die LEDs der gewählten Zone in ihrer Reihenfolge auf dem Streifen.
 const ruler = computed(() => zoneLeds(props.active));
 const activeZone = computed(() => zones.value[props.active]);
 </script>
@@ -28,17 +62,22 @@ const activeZone = computed(() => zones.value[props.active]);
             :style="{ background: `rgb(${c[0]} ${c[1]} ${c[2]})` }" />
       <span v-if="ruler.length === 0" class="preview__rulertext">{{ activeZone?.name ?? "—" }}: {{ t("noData") }}</span>
     </div>
-    <div class="preview__canvas">
+
+    <div ref="stage" class="preview__stage">
       <ZoneEditor :zones="zones" :active="props.active" :snap="state.config?.settings.snap ?? true"
                   :colors="colors" :ranges="ranges" :image="preview"
+                  :style="{ width: box.width + 'px', height: box.height + 'px' }"
                   @update:active="emit('update:active', $event)" @changed="commit" />
     </div>
+
     <div class="preview__foot">
       <span class="preview__stat">{{ t("screen") }} {{ screen[0] }}×{{ screen[1] }}</span>
       <span class="preview__stat">{{ t("buffer") }} {{ dims[0] }}×{{ dims[1] }}</span>
       <span class="preview__stat">{{ zones.length }} {{ t("zones") }}</span>
+      <span class="preview__stat">{{ box.width }}×{{ box.height }}</span>
+      <span class="preview__stat">{{ previewFps }} fps Vorschau</span>
       <span class="preview__spacer" />
-      <span class="preview__stat">{{ t("capture") }}: {{ t(camera as 'idle') }}</span>
+      <span class="preview__stat">{{ t("capture") }}: {{ t(camera as "idle") }}</span>
     </div>
   </section>
 </template>
@@ -49,16 +88,9 @@ const activeZone = computed(() => zones.value[props.active]);
 .preview__ruler.is-empty { align-items: center; justify-content: center; }
 .preview__rulertext { font-size: 9px; color: var(--wp-color-text-faint); font-family: var(--wp-font-family-mono); }
 .preview__tick { flex: 1 1 0; min-width: 1px; }
-.preview__canvas { flex: 1; min-height: 0; min-width: 0; padding: 0; overflow: hidden;
-  /* Container-Query: der Editor nimmt die groesstmoegliche 16:9-Flaeche ein und
-     wird nie verzerrt, egal wie das Fenster geformt ist. */
-  container-type: size; }
-.preview__canvas :deep(.editor) {
-  width: min(100cqw, calc(100cqh * 16 / 9));
-  height: auto;
-  aspect-ratio: 16 / 9;
-  margin: auto;
-}
+/* Die Bühne nimmt den freien Platz; der Kasten darin behält sein Seitenverhältnis
+   (Größe kommt aus `fit()`) und wird mittig gesetzt. */
+.preview__stage { flex: 1; min-height: 0; min-width: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
 .preview__foot { display: flex; align-items: center; gap: var(--wp-space-3); padding-top: var(--wp-space-1); border-top: var(--wp-size-border) solid var(--wp-color-border-subtle); }
 .preview__stat { font-family: var(--wp-font-family-mono); font-size: var(--wp-font-size-xs); color: var(--wp-color-text-faint); }
 .preview__spacer { flex: 1; }
