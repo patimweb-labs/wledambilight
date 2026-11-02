@@ -370,6 +370,14 @@ Actions; see [CONTRIBUTING.md](CONTRIBUTING.md) for the release process and
 [packaging/flatpak/README.md](packaging/flatpak/README.md) for Flatpak and
 Flathub.
 
+## Data and privacy
+
+Everything runs locally: the app captures your own screen and sends colour
+values to the devices you entered — nothing leaves your network. No account, no
+telemetry, no cloud service. Configuration lives in
+`~/.config/wled-ambilight/config.json` (Flatpak:
+`~/.var/app/io.github.smotherer007.WledAmbilight/config/`).
+
 ## License
 
 Copyright © 2026 Patrick Weppelmann.
