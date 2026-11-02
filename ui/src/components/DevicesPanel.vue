@@ -63,10 +63,10 @@ function createManual() {
 
 <template>
   <UI.WpSidePanel :title="t('devices')" :count="devices.length">
+    <template #actions>
       <button type="button" class="icon" :aria-label="t('scan')" :title="t('scan')" @click="scanNetwork">
         <UI.WpIcon :icon="IconSearch" size="sm" />
       </button>
-    <template #actions>
       <button type="button" class="icon" :aria-label="t('addDevice')" :title="t('addDevice')" @click="openDialog(null)">
         <UI.WpIcon :icon="IconPlus" size="sm" />
       </button>
