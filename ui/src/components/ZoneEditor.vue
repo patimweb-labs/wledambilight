@@ -14,6 +14,8 @@ const props = defineProps<{
   snap: boolean;
   colors: [number, number, number][];
   ranges: { start: number; count: number; label: string }[];
+  /** Aktuelles Bild der Aufnahme; ohne Bild bleibt die Fläche leer. */
+  image?: string | null;
 }>();
 const emit = defineEmits<{ "update:active": [index: number]; changed: [] }>();
 
@@ -96,7 +98,8 @@ function style(zone: Zone, index: number) {
 
 <template>
   <div ref="surface" class="editor">
-    <div class="editor__screen">
+    <img v-if="props.image" class="editor__image" :src="props.image" alt="" />
+    <div v-else class="editor__screen">
       <span class="editor__label">Bildschirm</span>
     </div>
     <button
@@ -129,6 +132,7 @@ function style(zone: Zone, index: number) {
   touch-action: none;
 }
 .editor__screen { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+.editor__image { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; image-rendering: auto; }
 .editor__label { font-family: var(--wp-font-family-mono); font-size: var(--wp-font-size-xs); color: var(--wp-color-text-faint); }
 .zone {
   position: absolute;

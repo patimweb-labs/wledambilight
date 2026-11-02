@@ -38,6 +38,8 @@ dirs = "7"
 sys-locale = "0.3"
 # HTTP für Razer Chroma (localhost) und Nanoleaf (LAN); kein TLS nötig
 ureq = { version = "3", default-features = false, features = ["json"] }
+# Vorschau: das aufgenommene Bild als JPEG an die Oberfläche
+image = { version = "0.25", default-features = false, features = ["jpeg"] }
 tauri = { version = "2", features = ["tray-icon", "image-png"] }
 
 # Linux: xdg-desktop-portal + PipeWire (über GStreamer)

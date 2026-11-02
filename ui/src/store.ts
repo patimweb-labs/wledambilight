@@ -1,6 +1,6 @@
 // Ein Zustand für die ganze Oberfläche. Quelle ist immer der Rust-Kern:
 // `snapshot` beim Start, `telemetry` als Ereignis, `save_config` für Änderungen.
-import { reactive } from "vue";
+import { reactive, ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { Config, FoundDevice, Snapshot, Telemetry, ThemeName } from "./api";
@@ -16,6 +16,9 @@ export const state = reactive({
   error: "" as string,
   notice: "" as string,
 });
+
+/** Aktuelles Bild der Aufnahme als data-URL (JPEG). */
+export const preview = ref<string | null>(null);
 
 export function t(key: Parameters<ReturnType<typeof translator>>[0]): string {
   return translator(state.config?.settings.language ?? "auto")(key);
@@ -42,6 +45,16 @@ export async function init() {
     await listen<Telemetry>("telemetry", (event) => {
       state.telemetry = event.payload;
     });
+    // Vorschau getrennt und langsamer als die Messwerte: 4 Bilder/s reichen,
+    // um Zonen zu setzen, und kosten weniger als ein Videostrom.
+    window.setInterval(async () => {
+      try {
+        const frame = await invoke<string | null>("preview_frame");
+        if (frame) preview.value = frame;
+      } catch {
+        /* Fenster noch nicht bereit: beim nächsten Takt erneut versuchen */
+      }
+    }, 250);
   } catch (error) {
     state.error = String(error);
   }

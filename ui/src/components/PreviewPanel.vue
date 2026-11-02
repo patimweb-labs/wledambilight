@@ -2,7 +2,7 @@
 // Mitte: der Bildschirm mit den Zonen. Diese Fläche ist das Herz der App —
 // hier wird gezogen, geskaliert und gesehen, was ankommt.
 import { computed } from "vue";
-import { commit, state, t, zoneLeds, zoneRanges } from "../store";
+import { commit, preview, state, t, zoneLeds, zoneRanges } from "../store";
 import ZoneEditor from "./ZoneEditor.vue";
 
 const props = defineProps<{ active: number }>();
@@ -30,7 +30,7 @@ const activeZone = computed(() => zones.value[props.active]);
     </div>
     <div class="preview__canvas">
       <ZoneEditor :zones="zones" :active="props.active" :snap="state.config?.settings.snap ?? true"
-                  :colors="colors" :ranges="ranges"
+                  :colors="colors" :ranges="ranges" :image="preview"
                   @update:active="emit('update:active', $event)" @changed="commit" />
     </div>
     <div class="preview__foot">

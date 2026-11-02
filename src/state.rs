@@ -15,13 +15,22 @@ use crate::worker::{Pipeline, Shared};
 pub struct AppState {
     /// Hält den Pipeline-Thread am Leben (Drop stoppt ihn).
     pipeline: Pipeline,
+    /// Nur im Autostart-Modus (`--minimized`) bleibt die App am Leben, wenn das
+    /// Fenster geschlossen wird. Sonst beendet Schließen die Anwendung — ein
+    /// unsichtbarer Prozess ohne Fenster ist keine Funktion, sondern eine Falle.
+    keep_in_tray: bool,
 }
 
 impl AppState {
-    pub fn new(cfg: &Config) -> Self {
+    pub fn new(cfg: &Config, keep_in_tray: bool) -> Self {
         Self {
             pipeline: Pipeline::start(cfg),
+            keep_in_tray,
         }
+    }
+
+    pub fn keep_in_tray(&self) -> bool {
+        self.keep_in_tray
     }
 
     pub fn shared(&self) -> Arc<Shared> {

@@ -328,6 +328,27 @@ pub async fn list_openrgb(host: String, port: u16) -> Result<Vec<FoundDevice>, S
     .map_err(|e| e.to_string())?
 }
 
+/// Das aktuelle Bild der Aufnahme als JPEG (data-URL) für die Vorschau.
+///
+/// Die Oberfläche fragt das Bild getrennt von den Messwerten ab: Bilder sind
+/// groß, Messwerte klein. So bleibt die Telemetrie schnell, und die Vorschau
+/// kann gebremst werden, ohne dass Zähler und LED-Leiste darunter leiden.
+#[tauri::command]
+pub fn preview_frame(state: State<'_, AppState>) -> Option<String> {
+    let frame = state.shared().frame.lock().ok()?.clone();
+    if frame.w == 0 || frame.h == 0 || frame.data.len() < (frame.w * frame.h * 3) as usize {
+        return None;
+    }
+    let image = image::RgbImage::from_raw(frame.w, frame.h, frame.data.to_vec())?;
+    let mut jpeg = Vec::new();
+    let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpeg, 70);
+    encoder.encode_image(&image).ok()?;
+    Some(format!(
+        "data:image/jpeg;base64,{}",
+        crate::output::base64(&jpeg)
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

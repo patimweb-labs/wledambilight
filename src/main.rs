@@ -115,7 +115,7 @@ fn main() {
     i18n::init(&cfg.settings.language);
 
     tauri::Builder::default()
-        .manage(AppState::new(&cfg))
+        .manage(AppState::new(&cfg, minimized))
         .invoke_handler(tauri::generate_handler![
             commands::snapshot,
             commands::telemetry_now,
@@ -130,6 +130,7 @@ fn main() {
             commands::probe_wled,
             commands::pair_nanoleaf,
             commands::list_openrgb,
+            commands::preview_frame,
         ])
         .setup(move |app| {
             tray::install(app)?;
@@ -142,11 +143,17 @@ fn main() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            // Schließen legt das Fenster nur weg: die Pipeline und das
-            // Taskleisten-Symbol bleiben, sonst wäre der Autostart sinnlos.
+            // Im Autostart-Modus (--minimized) legt Schliessen das Fenster nur weg,
+            // damit Aufnahme und Taskleisten-Symbol weiterlaufen. In allen anderen
+            // Faellen beendet Schliessen die Anwendung — wie jedes andere Programm.
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                api.prevent_close();
-                let _ = window.hide();
+                let keep = window.app_handle().state::<AppState>().keep_in_tray();
+                if keep {
+                    api.prevent_close();
+                    let _ = window.hide();
+                } else {
+                    window.app_handle().exit(0);
+                }
             }
         })
         .run(tauri::generate_context!())

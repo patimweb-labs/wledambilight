@@ -4,7 +4,7 @@
 import { computed } from "vue";
 import * as UI from "@weppelmann/components";
 import { IconPause, IconPlay, IconRefresh, IconWifi } from "@weppelmann/icons";
-import { restartCapture, setPaused, state, t } from "../store";
+import { commit, restartCapture, setPaused, state, t } from "../store";
 
 const telemetry = computed(() => state.telemetry);
 const paused = computed(() => telemetry.value?.paused ?? false);
@@ -16,6 +16,17 @@ const liveTone = computed(() => {
   if (capture.value === "error") return "error" as const;
   if (capture.value === "starting") return "warn" as const;
   return "neutral" as const;
+});
+
+// Testbild liegt wie vorher in der Kopfzeile: ohne Bildschirmfreigabe prüfen,
+// ob Zonen, Richtung und Farben stimmen.
+const testPicture = computed({
+  get: () => state.config?.settings.test_image ?? false,
+  set: (value: boolean) => {
+    if (!state.config) return;
+    state.config.settings.test_image = value;
+    commit();
+  },
 });
 
 const liveLabel = computed(() => {
@@ -33,9 +44,14 @@ const liveLabel = computed(() => {
     </div>
     <UI.WpBadge :tone="liveTone" :label="liveLabel" />
     <div class="top__spacer" />
+    <UI.WpSwitch v-model="testPicture" :label="t('testImage')" />
+    <UI.WpDivider direction="vertical" />
     <UI.WpButton :label="t('restart')" :icon="IconRefresh" size="sm" @press="restartCapture" />
     <UI.WpButton :label="paused ? t('resume') : t('pause')" :icon="paused ? IconPlay : IconPause"
                  size="sm" :variant="paused ? 'primary' : 'secondary'" @press="setPaused(!paused)" />
+    <p v-if="state.telemetry?.capture === 'error'" class="top__error" :title="state.telemetry?.capture_error ?? ''">
+      {{ t("capture") }}: {{ state.telemetry?.capture_error }}
+    </p>
   </header>
 </template>
 
@@ -50,4 +66,5 @@ const liveLabel = computed(() => {
 .top__mark { color: var(--wp-color-accent-default); }
 .top__name { font-family: var(--wp-font-family-display); font-size: var(--wp-font-size-md); font-weight: var(--wp-font-weight-semibold); letter-spacing: -0.01em; }
 .top__spacer { flex: 1; }
+.top__error { margin: 0; font-size: var(--wp-font-size-xs); color: var(--wp-color-status-error); max-width: 46ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>
