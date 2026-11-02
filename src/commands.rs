@@ -204,18 +204,50 @@ impl From<discovery::Found> for FoundDevice {
     }
 }
 
+/// Bereits eingerichtete Geräte aus der Fundliste nehmen.
+///
+/// Der Netzwerkscan sieht nur, was antwortet — nicht, was schon konfiguriert ist.
+/// Ein Vorschlag, den man nicht mehr hinzufügen kann, ist keiner: die Liste zeigt
+/// nur Geräte, die noch fehlen. Bekannt heißt: gleiche Kennung, oder gleiche
+/// Adresse am gleichen Port.
+fn without_known(
+    found: Vec<discovery::Found>,
+    devices: &[crate::config::DeviceCfg],
+) -> Vec<discovery::Found> {
+    found
+        .into_iter()
+        .filter(|f| {
+            !devices.iter().any(|d| {
+                if d.id == f.id {
+                    return true;
+                }
+                // Hinter einer Adresse koennen mehrere Geraete haengen (OpenRGB-
+                // Server mit Tastatur und Maus). Dort zaehlt nur die Kennung.
+                if !f.target.is_empty() || !d.target.is_empty() {
+                    return false;
+                }
+                d.host == f.host && d.port == f.port
+            })
+        })
+        .collect()
+}
+
 /// Netzwerk durchsuchen. Blockiert bis alle Teilnehmer fertig sind (höchstens 12 s),
 /// deshalb in einem eigenen Thread statt im Aufrufer.
 #[tauri::command]
-pub async fn discover() -> Result<Vec<FoundDevice>, String> {
-    tauri::async_runtime::spawn_blocking(|| {
+pub async fn discover(state: State<'_, AppState>) -> Result<Vec<FoundDevice>, String> {
+    let known = state.shared().config().devices.clone();
+    tauri::async_runtime::spawn_blocking(move || {
         let scan = discovery::search();
         let start = Instant::now();
         while !scan.done() && start.elapsed() < Duration::from_secs(12) {
             std::thread::sleep(Duration::from_millis(100));
         }
         let found = scan.found.lock().map(|v| v.clone()).unwrap_or_default();
-        found.into_iter().map(FoundDevice::from).collect::<Vec<_>>()
+        without_known(found, &known)
+            .into_iter()
+            .map(FoundDevice::from)
+            .collect::<Vec<_>>()
     })
     .await
     .map_err(|e| e.to_string())
@@ -345,7 +377,12 @@ pub fn preview_frame(state: State<'_, AppState>, max_width: Option<u32>) -> Opti
     let limit = max_width.unwrap_or(480).max(64);
     if image.width() > limit {
         let height = (image.height() as f32 * limit as f32 / image.width() as f32) as u32;
-        image = image::imageops::resize(&image, limit, height.max(1), image::imageops::FilterType::Triangle);
+        image = image::imageops::resize(
+            &image,
+            limit,
+            height.max(1),
+            image::imageops::FilterType::Triangle,
+        );
     }
     let mut jpeg = Vec::new();
     let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpeg, 72);
@@ -360,6 +397,60 @@ pub fn preview_frame(state: State<'_, AppState>, max_width: Option<u32>) -> Opti
 mod tests {
     use super::*;
     use crate::config::{DeviceCfg, Zone};
+
+    fn found(host: &str, port: u16, id: &str, target: &str) -> crate::discovery::Found {
+        crate::discovery::Found {
+            kind: crate::config::DeviceKind::Wled,
+            id: id.to_string(),
+            name: id.to_string(),
+            host: host.to_string(),
+            port,
+            target: target.to_string(),
+            leds: 1,
+            detail: String::new(),
+        }
+    }
+
+    #[test]
+    fn known_devices_are_not_offered_again() {
+        let wled = DeviceCfg::new("192.168.1.42", "Wand", 120);
+        let mut keyboard = DeviceCfg::new("127.0.0.1", "Tastatur", 104);
+        keyboard.id = "openrgb:127.0.0.1:6742:Tastatur".to_string();
+        keyboard.port = 6742;
+        keyboard.target = "Keyboard@0".to_string();
+
+        let rest = without_known(
+            vec![
+                found("192.168.1.42", 0, "wled:192.168.1.42", ""),
+                found(
+                    "127.0.0.1",
+                    6742,
+                    "openrgb:127.0.0.1:6742:Tastatur",
+                    "Keyboard@0",
+                ),
+                // Gleicher Server, anderer Controller: der fehlt noch.
+                found("127.0.0.1", 6742, "openrgb:127.0.0.1:6742:Maus", "Mouse@1"),
+                found("192.168.1.99", 0, "wled:192.168.1.99", ""),
+            ],
+            &[wled, keyboard],
+        );
+
+        let ids: Vec<&str> = rest.iter().map(|f| f.id.as_str()).collect();
+        assert_eq!(ids, ["openrgb:127.0.0.1:6742:Maus", "wled:192.168.1.99"]);
+    }
+
+    #[test]
+    fn same_address_without_target_is_the_same_device() {
+        let strip = DeviceCfg::new("192.168.1.7", "Regal", 60);
+        let rest = without_known(
+            vec![found("192.168.1.7", 0, "wled:192.168.1.7", "")],
+            &[strip],
+        );
+        assert!(
+            rest.is_empty(),
+            "gleiche Adresse ohne Ziel ist dasselbe Gerät"
+        );
+    }
 
     fn device(id: &str, leds: u16) -> DeviceCfg {
         // `DeviceCfg::new` leitet die id aus dem Host ab; für den Test brauchen
