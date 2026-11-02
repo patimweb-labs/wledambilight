@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.4.0](https://github.com/patimweb-labs/wledambilight/compare/v0.3.0...v0.4.0) (2026-11-02)
+
+
+### Features
+
+* test picture instead of the screen ([664e11c](https://github.com/patimweb-labs/wledambilight/commit/664e11cefefe641c5d0ab408d015f05406658b46))
+* the LED tape shows the strip as it lies, with an LED 0 tag ([4dc4c84](https://github.com/patimweb-labs/wledambilight/commit/4dc4c8475e42a82ba7c10feabbbb711d821af3d6))
+* themes at runtime, Crosspoint look as the default ([cd09647](https://github.com/patimweb-labs/wledambilight/commit/cd0964713c18b9e75275e08e4974fe711c3277c4))
+
+
+### Bug fixes
+
+* change the resolution without a new portal session ([5aad2ea](https://github.com/patimweb-labs/wledambilight/commit/5aad2eae13381fcb864ba4d903fed8a6ddd96e95))
+* move a zone's LED block and split only that zone ([c6c62ed](https://github.com/patimweb-labs/wledambilight/commit/c6c62ed047148b5ca69fc951c81908a0351ee54f))
+* switch test picture and screen back and forth instantly ([33f2110](https://github.com/patimweb-labs/wledambilight/commit/33f2110cb761ae3de9f8a63de42588b018503ef3))
+* the up/down arrows of the zone list were dead ([11a9a24](https://github.com/patimweb-labs/wledambilight/commit/11a9a24e0e30cd27c0941ff1c8fadaba68ea2e19))
+
+
+### Build and packaging
+
+* bump screencapturekit from 11.0.0 to 11.1.1 ([fdef499](https://github.com/patimweb-labs/wledambilight/commit/fdef4997fae8f0819f7aa9799b8002f8afd57ed2))
+* bump screencapturekit from 11.0.0 to 11.1.1 ([379efbf](https://github.com/patimweb-labs/wledambilight/commit/379efbf1b1b95725f81041f25280a8e16c59b3bb))
+* bump the cargo-patch group with 2 updates ([7f351c9](https://github.com/patimweb-labs/wledambilight/commit/7f351c925085d7beb77211fcd053ed3cbf6a902b))
+* bump the cargo-patch group with 2 updates ([5290a84](https://github.com/patimweb-labs/wledambilight/commit/5290a8481792a07260a004e2e61a5216cde70114))
+* bump ureq from 3.4.2 to 3.5.0 ([45e58fd](https://github.com/patimweb-labs/wledambilight/commit/45e58fd659c21816660da9e1e09fcbb5c35b18b0))
+* bump ureq from 3.4.2 to 3.5.0 ([37219c4](https://github.com/patimweb-labs/wledambilight/commit/37219c4c4969372d8e2a7abb13b0d09580bdb5af))
+
 ## [0.3.0](https://github.com/Smotherer007/wledambilight/compare/v0.2.0...v0.3.0) (2026-10-20)
 
 
