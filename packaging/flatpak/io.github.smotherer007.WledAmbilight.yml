@@ -43,27 +43,18 @@ build-options:
     WPM_UI_DIR: /run/build/weppelmann-ui
 
 modules:
-  # Die geteilte Oberflächen-Bibliothek: Tokens werden hier gebaut, die
-  # Komponenten liest Vite direkt aus den Quellen.
-  - name: weppelmann-ui
-    buildsystem: simple
-    build-commands:
-      - npm ci --no-audit --no-fund
-      - npm run -w @weppelmann/tokens build
-    sources:
-      - type: dir
-        path: ../../../weppelmann-ui
-        skip:
-          - node_modules
-          - "**/node_modules"
-          - "**/dist"
-
+  # Die Oberflaeche wird VOR dem Flatpak-Bau auf dem Host erzeugt:
+  #   cd ui && npm ci && npm run build
+  # Grund: npm im Build-Sandkasten (10.9.9 der node22-Extension) bricht bei
+  # diesem Workspace mit "Exit handler never called!" ab. Fuer Flathub muss
+  # das spaeter auf einen npm-Aufruf im Sandkasten zurueck (oder auf eine
+  # feste Node-Version), hier zaehlt ein reproduzierbarer lokaler Bau.
   - name: wled-ambilight
     buildsystem: simple
+    build-options:
+      env:
+        HOME: /tmp
     build-commands:
-      - npm ci --no-audit --no-fund
-      - npm --prefix ui ci --no-audit --no-fund
-      - npm --prefix ui run build
       - cargo --offline fetch --manifest-path Cargo.toml --verbose
       - cargo --offline build --release --locked --verbose
       - install -Dm755 target/release/wled-ambilight ${FLATPAK_DEST}/bin/wled-ambilight
@@ -77,7 +68,7 @@ modules:
         skip:
           - target
           - build-flatpak
+          - build-dir
           - .flatpak-builder
           - ui/node_modules
-          - ui/dist
       - cargo-sources.json
