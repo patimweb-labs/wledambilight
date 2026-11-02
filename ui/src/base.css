@@ -11,5 +11,8 @@ body {
   overflow: hidden;
 }
 *, *::before, *::after { box-sizing: border-box; }
+
+/* Kein horizontaler Balken: die Ansicht ist auf Fensterbreite gebaut. */
+.app, .body { overflow: hidden; }
 /* Die Fensterleiste zieht das Fenster; Knöpfe bleiben bedienbar. */
 .drag-region { -webkit-app-region: drag; }

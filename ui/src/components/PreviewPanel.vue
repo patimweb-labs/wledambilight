@@ -49,8 +49,16 @@ const activeZone = computed(() => zones.value[props.active]);
 .preview__ruler.is-empty { align-items: center; justify-content: center; }
 .preview__rulertext { font-size: 9px; color: var(--wp-color-text-faint); font-family: var(--wp-font-family-mono); }
 .preview__tick { flex: 1 1 0; min-width: 1px; }
-.preview__canvas { flex: 1; min-height: 0; display: flex; align-items: stretch; justify-content: center; padding: 0; }
-.preview__canvas :deep(.editor) { height: 100%; width: auto; max-width: 100%; max-height: 100%; margin: 0 auto; }
+.preview__canvas { flex: 1; min-height: 0; min-width: 0; padding: 0; overflow: hidden;
+  /* Container-Query: der Editor nimmt die groesstmoegliche 16:9-Flaeche ein und
+     wird nie verzerrt, egal wie das Fenster geformt ist. */
+  container-type: size; }
+.preview__canvas :deep(.editor) {
+  width: min(100cqw, calc(100cqh * 16 / 9));
+  height: auto;
+  aspect-ratio: 16 / 9;
+  margin: auto;
+}
 .preview__foot { display: flex; align-items: center; gap: var(--wp-space-3); padding-top: var(--wp-space-1); border-top: var(--wp-size-border) solid var(--wp-color-border-subtle); }
 .preview__stat { font-family: var(--wp-font-family-mono); font-size: var(--wp-font-size-xs); color: var(--wp-color-text-faint); }
 .preview__spacer { flex: 1; }

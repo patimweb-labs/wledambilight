@@ -123,9 +123,7 @@ function style(zone: Zone, index: number) {
 <style scoped>
 .editor {
   position: relative;
-  aspect-ratio: 16 / 9;
-  height: 100%;
-  width: auto;
+  /* Groesse kommt von aussen (PreviewPanel), damit das Bild nicht verzerrt. */
   background: var(--wp-color-bg-input);
   border: var(--wp-size-border) solid var(--wp-color-border-strong);
   overflow: hidden;

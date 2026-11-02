@@ -45,8 +45,8 @@ export async function init() {
     await listen<Telemetry>("telemetry", (event) => {
       state.telemetry = event.payload;
     });
-    // Vorschau getrennt und langsamer als die Messwerte: 4 Bilder/s reichen,
-    // um Zonen zu setzen, und kosten weniger als ein Videostrom.
+    // Vorschau getrennt von den Messwerten. 90 ms (~11 Bilder/s) sind flüssig
+    // genug, um Bewegung zu sehen, und deutlich billiger als ein Videostrom.
     window.setInterval(async () => {
       try {
         const frame = await invoke<string | null>("preview_frame");
@@ -54,7 +54,7 @@ export async function init() {
       } catch {
         /* Fenster noch nicht bereit: beim nächsten Takt erneut versuchen */
       }
-    }, 250);
+    }, 90);
   } catch (error) {
     state.error = String(error);
   }
