@@ -2,50 +2,50 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" shape-rendering="crispEdges">
   <title>WLED Ambilight</title>
   <!-- Erzeugt von markenwerk aus marken/wled-ambilight.pm. Nicht von Hand ändern:
-       die Quelle ist das Raster, nicht dieses Bild. -->
-  <rect width="512" height="512" fill="#A8321E"/>
-<rect x="128" y="48" width="32" height="16" fill="#E9E5DC"/>
-<rect x="240" y="48" width="32" height="16" fill="#E9E5DC"/>
-<rect x="352" y="48" width="32" height="16" fill="#E9E5DC"/>
-<rect x="128" y="64" width="32" height="16" fill="#E9E5DC"/>
-<rect x="240" y="64" width="32" height="16" fill="#E9E5DC"/>
-<rect x="352" y="64" width="32" height="16" fill="#E9E5DC"/>
+       die Quelle ist das Raster, nicht dieses Bild. Kachelform: Achteck. -->
+  <path d="M 112 0 H 400 L 512 112 V 400 L 400 512 H 112 L 0 400 V 112 Z" fill="#A8321E"/>
 <rect x="128" y="80" width="32" height="16" fill="#E9E5DC"/>
 <rect x="240" y="80" width="32" height="16" fill="#E9E5DC"/>
 <rect x="352" y="80" width="32" height="16" fill="#E9E5DC"/>
-<rect x="112" y="112" width="288" height="16" fill="#E9E5DC"/>
-<rect x="112" y="128" width="288" height="16" fill="#E9E5DC"/>
-<rect x="112" y="144" width="32" height="16" fill="#E9E5DC"/>
-<rect x="368" y="144" width="32" height="16" fill="#E9E5DC"/>
-<rect x="48" y="160" width="32" height="16" fill="#E9E5DC"/>
-<rect x="112" y="160" width="32" height="16" fill="#E9E5DC"/>
-<rect x="368" y="160" width="32" height="16" fill="#E9E5DC"/>
-<rect x="432" y="160" width="32" height="16" fill="#E9E5DC"/>
-<rect x="48" y="176" width="32" height="16" fill="#E9E5DC"/>
+<rect x="128" y="96" width="32" height="16" fill="#E9E5DC"/>
+<rect x="240" y="96" width="32" height="16" fill="#E9E5DC"/>
+<rect x="352" y="96" width="32" height="16" fill="#E9E5DC"/>
+<rect x="128" y="112" width="32" height="16" fill="#E9E5DC"/>
+<rect x="240" y="112" width="32" height="16" fill="#E9E5DC"/>
+<rect x="352" y="112" width="32" height="16" fill="#E9E5DC"/>
+<rect x="112" y="144" width="288" height="16" fill="#E9E5DC"/>
+<rect x="112" y="160" width="288" height="16" fill="#E9E5DC"/>
 <rect x="112" y="176" width="32" height="16" fill="#E9E5DC"/>
 <rect x="368" y="176" width="32" height="16" fill="#E9E5DC"/>
-<rect x="432" y="176" width="32" height="16" fill="#E9E5DC"/>
+<rect x="48" y="192" width="32" height="16" fill="#E9E5DC"/>
 <rect x="112" y="192" width="32" height="16" fill="#E9E5DC"/>
 <rect x="368" y="192" width="32" height="16" fill="#E9E5DC"/>
+<rect x="432" y="192" width="32" height="16" fill="#E9E5DC"/>
+<rect x="48" y="208" width="32" height="16" fill="#E9E5DC"/>
 <rect x="112" y="208" width="32" height="16" fill="#E9E5DC"/>
 <rect x="368" y="208" width="32" height="16" fill="#E9E5DC"/>
+<rect x="432" y="208" width="32" height="16" fill="#E9E5DC"/>
 <rect x="112" y="224" width="32" height="16" fill="#E9E5DC"/>
 <rect x="368" y="224" width="32" height="16" fill="#E9E5DC"/>
-<rect x="48" y="240" width="32" height="16" fill="#E9E5DC"/>
 <rect x="112" y="240" width="32" height="16" fill="#E9E5DC"/>
 <rect x="368" y="240" width="32" height="16" fill="#E9E5DC"/>
-<rect x="432" y="240" width="32" height="16" fill="#E9E5DC"/>
-<rect x="48" y="256" width="32" height="16" fill="#E9E5DC"/>
 <rect x="112" y="256" width="32" height="16" fill="#E9E5DC"/>
 <rect x="368" y="256" width="32" height="16" fill="#E9E5DC"/>
-<rect x="432" y="256" width="32" height="16" fill="#E9E5DC"/>
+<rect x="48" y="272" width="32" height="16" fill="#E9E5DC"/>
 <rect x="112" y="272" width="32" height="16" fill="#E9E5DC"/>
 <rect x="368" y="272" width="32" height="16" fill="#E9E5DC"/>
-<rect x="112" y="288" width="288" height="16" fill="#E9E5DC"/>
-<rect x="112" y="304" width="288" height="16" fill="#E9E5DC"/>
-<rect x="240" y="320" width="32" height="16" fill="#E9E5DC"/>
-<rect x="240" y="336" width="32" height="16" fill="#E9E5DC"/>
+<rect x="432" y="272" width="32" height="16" fill="#E9E5DC"/>
+<rect x="48" y="288" width="32" height="16" fill="#E9E5DC"/>
+<rect x="112" y="288" width="32" height="16" fill="#E9E5DC"/>
+<rect x="368" y="288" width="32" height="16" fill="#E9E5DC"/>
+<rect x="432" y="288" width="32" height="16" fill="#E9E5DC"/>
+<rect x="112" y="304" width="32" height="16" fill="#E9E5DC"/>
+<rect x="368" y="304" width="32" height="16" fill="#E9E5DC"/>
+<rect x="112" y="320" width="288" height="16" fill="#E9E5DC"/>
+<rect x="112" y="336" width="288" height="16" fill="#E9E5DC"/>
 <rect x="240" y="352" width="32" height="16" fill="#E9E5DC"/>
-<rect x="176" y="368" width="160" height="16" fill="#E9E5DC"/>
-<rect x="176" y="384" width="160" height="16" fill="#E9E5DC"/>
+<rect x="240" y="368" width="32" height="16" fill="#E9E5DC"/>
+<rect x="240" y="384" width="32" height="16" fill="#E9E5DC"/>
+<rect x="176" y="400" width="160" height="16" fill="#E9E5DC"/>
+<rect x="176" y="416" width="160" height="16" fill="#E9E5DC"/>
 </svg>
