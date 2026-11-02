@@ -43,6 +43,13 @@ build-options:
     WPM_UI_DIR: /run/build/weppelmann-ui
 
 modules:
+  # Tray-Symbol: Tauri baut libappindicator-Sys ein und bricht ohne die
+  # Bibliothek beim Start ab ("Failed to load ayatana-appindicator3").
+  # Vor dem Bau einmal holen:
+  #   git clone --depth 1 https://github.com/flathub/shared-modules.git \
+  #       packaging/flatpak/shared-modules
+  - shared-modules/libayatana-appindicator/libayatana-appindicator-gtk3.json
+
   # Die Oberflaeche wird VOR dem Flatpak-Bau auf dem Host erzeugt:
   #   cd ui && npm ci && npm run build
   # Grund: npm im Build-Sandkasten (10.9.9 der node22-Extension) bricht bei

@@ -10,3 +10,4 @@ packaging/flatpak/.flatpak-cargo-generator.py
 /gen
 *.tsbuildinfo
 .DS_Store
+packaging/flatpak/shared-modules/
