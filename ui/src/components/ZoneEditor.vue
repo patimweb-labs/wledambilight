@@ -147,9 +147,7 @@ function style(zone: Zone, index: number) {
   text-shadow: 0 1px 2px rgb(0 0 0 / 0.85);
 }
 .zone:active { cursor: grabbing; }
-.zone.is-active { border-style: solid; border-width: 2px; }
 .zone:focus-visible { outline: var(--wp-size-focus) solid var(--wp-color-focus-ring); outline-offset: -2px; }
-.zone.is-off { opacity: 0.4; }
 .zone__num {
   display: inline-flex; align-items: center; justify-content: center;
   min-width: 13px; height: 13px; margin-right: 4px;
@@ -157,6 +155,8 @@ function style(zone: Zone, index: number) {
   font-size: 9px; font-weight: 600;
 }
 .zone__label { pointer-events: none; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.zone.is-active { border-style: solid; border-width: 2px; }
+.zone.is-off { opacity: 0.4; }
 .zone__handle {
   position: absolute; right: 0; bottom: 0; width: 10px; height: 10px;
   background: var(--wp-color-accent-default); cursor: nwse-resize;

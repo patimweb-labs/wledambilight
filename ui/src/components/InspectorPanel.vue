@@ -138,9 +138,7 @@ function resetPicture() {
 </script>
 
 <template>
-  <aside class="inspector">
-    <UI.WpTabs v-model="tab" :tabs="tabs" class="inspector__tabs" />
-    <div class="inspector__body">
+  <UI.WpInspector v-model="tab" :tabs="tabs">
       <!-- ------------------------------------------------------------ Zonen -->
       <template v-if="tab === 'zones'">
         <p class="hint">{{ t("orderHint") }}</p>
@@ -258,20 +256,10 @@ function resetPicture() {
         <p class="section">{{ t("about") }}</p>
         <p class="hint">WLED Ambilight · GPL-3.0-or-later · Patrick Weppelmann</p>
       </template>
-    </div>
-  </aside>
+  </UI.WpInspector>
 </template>
 
 <style scoped>
-.inspector {
-  width: 320px; flex: none; display: flex; flex-direction: column; min-height: 0;
-  background: var(--wp-color-bg-panel);
-  border-left: var(--wp-size-border) solid var(--wp-color-border-subtle);
-}
-.inspector__tabs { padding: 0 var(--wp-space-2); }
-.inspector__tabs :deep(.wp-tabs__list) { border-bottom: 0; }
-.inspector__tabs :deep(.wp-tabs__panel) { display: none; }
-.inspector__body { flex: 1; overflow-y: auto; padding: var(--wp-space-3); display: flex; flex-direction: column; gap: var(--wp-space-2); }
 .hint { margin: 0; font-size: var(--wp-font-size-xs); color: var(--wp-color-text-faint); }
 .section { margin: var(--wp-space-2) 0 0; font-family: var(--wp-font-family-display); font-size: var(--wp-font-size-sm); font-weight: var(--wp-font-weight-semibold); }
 .sub { margin: var(--wp-space-2) 0 0; font-size: var(--wp-font-size-xs); color: var(--wp-color-text-muted); }
@@ -281,7 +269,6 @@ function resetPicture() {
   text-align: left; background: var(--wp-color-bg-raised); border: var(--wp-size-border) solid var(--wp-color-border-subtle);
   color: var(--wp-color-text-default); font: inherit; padding: 5px var(--wp-space-2); cursor: pointer;
 }
-.zonerow.is-active { border-color: var(--wp-color-accent-default); }
 .zonerow__dot { width: 8px; height: 8px; border: var(--wp-size-border) solid var(--wp-color-border-strong); }
 .zonerow__main { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .zonerow__name { font-size: var(--wp-font-size-sm); }
@@ -290,4 +277,5 @@ function resetPicture() {
 .mini { background: none; border: 0; color: var(--wp-color-text-faint); cursor: pointer; padding: 2px; display: inline-flex; }
 .mini:hover { color: var(--wp-color-text-default); }
 .row { display: flex; gap: var(--wp-space-1); flex-wrap: wrap; margin-top: var(--wp-space-1); }
+.zonerow.is-active { border-color: var(--wp-color-accent-default); }
 </style>

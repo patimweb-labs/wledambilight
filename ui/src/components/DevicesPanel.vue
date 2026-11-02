@@ -62,18 +62,15 @@ function createManual() {
 </script>
 
 <template>
-  <aside class="devices">
-    <div class="devices__head">
-      <span class="devices__title">{{ t("devices") }}</span>
-      <span class="devices__count">{{ devices.length }}</span>
-      <span class="devices__spacer" />
+  <UI.WpSidePanel :title="t('devices')" :count="devices.length">
       <button type="button" class="icon" :aria-label="t('scan')" :title="t('scan')" @click="scanNetwork">
         <UI.WpIcon :icon="IconSearch" size="sm" />
       </button>
+    <template #actions>
       <button type="button" class="icon" :aria-label="t('addDevice')" :title="t('addDevice')" @click="openDialog(null)">
         <UI.WpIcon :icon="IconPlus" size="sm" />
       </button>
-    </div>
+    </template>
 
     <div v-if="scanning" class="scan"><UI.WpSpinner size="sm" /> <span>{{ t("scanning") }}</span></div>
     <div v-else-if="found.length" class="scan scan--list">
@@ -136,8 +133,8 @@ function createManual() {
       </div>
     </div>
 
-    <DeviceDialog v-model:open="dialogOpen" :device="editing" />
-  </aside>
+  </UI.WpSidePanel>
+  <DeviceDialog v-model:open="dialogOpen" :device="editing" />
 </template>
 
 <style scoped>
@@ -147,10 +144,6 @@ function createManual() {
   border-right: var(--wp-size-border) solid var(--wp-color-border-subtle);
   min-height: 0;
 }
-.devices__head { display: flex; align-items: center; gap: var(--wp-space-2); padding: var(--wp-space-2) var(--wp-space-3); }
-.devices__title { font-family: var(--wp-font-family-display); font-size: var(--wp-font-size-sm); font-weight: var(--wp-font-weight-semibold); }
-.devices__count { font-family: var(--wp-font-family-mono); font-size: var(--wp-font-size-xs); color: var(--wp-color-text-faint); }
-.devices__spacer { flex: 1; }
 .icon { background: none; border: 0; color: var(--wp-color-text-muted); cursor: pointer; padding: 3px; display: inline-flex; }
 .icon:hover { color: var(--wp-color-text-default); }
 .scan { display: flex; align-items: center; gap: var(--wp-space-2); padding: 0 var(--wp-space-3) var(--wp-space-2); font-size: var(--wp-font-size-xs); color: var(--wp-color-text-muted); }
