@@ -36,7 +36,11 @@ jobs:
       created: ${{ steps.rp.outputs.release_created }}
       tag: ${{ steps.rp.outputs.tag_name }}
     steps:
-      - uses: googleapis/release-please-action@v5
+      # v5 verschluckt den Fehler: nach "release-please failed:" steht nichts,
+      # weil der abgelehnte GraphQL-Aufruf kein Error-Objekt ist (offener
+      # PR #1223 "handle non-Error rejections in main() catch block").
+      # v4.4.1 gibt den Grund aus: entweder gruen oder mit lesbarem Fehler.
+      - uses: googleapis/release-please-action@v4.4.1
         id: rp
         with:
           config-file: release-please-config.json
