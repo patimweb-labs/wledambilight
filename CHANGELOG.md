@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.2](https://github.com/patimweb-labs/wledambilight/compare/v0.5.1...v0.5.2) (2026-11-02)
+
+### Bug Fixes
+
+* Release-Pipeline repariert: Linux-Pakete, Windows-Paket und Flatpak entstehen wieder
+  (0.5.0 und 0.5.1 enthielten nur die macOS-DMG)
+
 ## [0.5.1](https://github.com/patimweb-labs/wledambilight/compare/v0.5.0...v0.5.1) (2026-11-02)
 
 
