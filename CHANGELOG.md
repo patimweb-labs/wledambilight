@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.5.0](https://github.com/patimweb-labs/wledambilight/compare/v0.4.0...v0.5.0) (2026-11-02)
+
+
+### ⚠ BREAKING CHANGES
+
+* anderes Toolkit, andere Abhängigkeiten.
+
+### Features
+
+* Oberfläche als Web-Anwendung (Vue + Tauri) ([f336273](https://github.com/patimweb-labs/wledambilight/commit/f33627356e04929c698f5a623ecb56c98ba7d4a4))
+
 ## [0.4.0](https://github.com/patimweb-labs/wledambilight/compare/v0.3.0...v0.4.0) (2026-11-02)
 
 

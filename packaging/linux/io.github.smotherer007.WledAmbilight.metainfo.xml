@@ -75,7 +75,7 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
-    <release version="0.4.0" date="2026-10-20"><!-- x-release-please-version -->
+    <release version="0.5.0" date="2026-10-20"><!-- x-release-please-version -->
       <description>
         <p>New window as a web application (Vue), delivered by Tauri. Capture,
         sampling and output stay in the Rust core.</p>
