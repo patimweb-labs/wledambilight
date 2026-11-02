@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/patimweb-labs/wledambilight/compare/v0.5.0...v0.5.1) (2026-11-02)
+
+
+### Documentation
+
+* Ablauf ueber Branch und Pull Request festschreiben ([#14](https://github.com/patimweb-labs/wledambilight/issues/14)) ([f228893](https://github.com/patimweb-labs/wledambilight/commit/f2288935e15c241c1c7afa46ad8cafcd1c5a61fd))
+
 ## [0.5.0](https://github.com/patimweb-labs/wledambilight/compare/v0.4.0...v0.5.0) (2026-11-02)
 
 
