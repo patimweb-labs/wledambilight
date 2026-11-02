@@ -7,7 +7,7 @@
 // mittig gesetzt. Damit quetscht sich weder Testbild noch Stream, und die Zonen
 // liegen immer genau auf dem Bild.
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
-import { commit, preview, previewFps, state, t, zoneLeds, zoneRanges } from "../store";
+import { commit, preview, previewFps, state, t, zoneRanges } from "../store";
 import ZoneEditor from "./ZoneEditor.vue";
 
 const props = defineProps<{ active: number }>();
@@ -50,19 +50,10 @@ onBeforeUnmount(() => observer?.disconnect());
 // Andere Aufnahmebreite → anderes Seitenverhältnis → neu einpassen.
 watch(aspect, fit);
 
-// Lineal: die LEDs der gewählten Zone in ihrer Reihenfolge auf dem Streifen.
-const ruler = computed(() => zoneLeds(props.active));
-const activeZone = computed(() => zones.value[props.active]);
 </script>
 
 <template>
   <section class="preview">
-    <div class="preview__ruler" :class="{ 'is-empty': ruler.length === 0 }" :aria-label="t('ledRuler')">
-      <span v-for="(c, i) in ruler" :key="i" class="preview__tick"
-            :style="{ background: `rgb(${c[0]} ${c[1]} ${c[2]})` }" />
-      <span v-if="ruler.length === 0" class="preview__rulertext">{{ activeZone?.name ?? "—" }}: {{ t("noData") }}</span>
-    </div>
-
     <div ref="stage" class="preview__stage">
       <ZoneEditor :zones="zones" :active="props.active" :snap="state.config?.settings.snap ?? true"
                   :colors="colors" :ranges="ranges" :image="preview"
@@ -84,10 +75,6 @@ const activeZone = computed(() => zones.value[props.active]);
 
 <style scoped>
 .preview { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: var(--wp-space-3); gap: var(--wp-space-2); min-height: 0; }
-.preview__ruler { display: flex; height: 12px; border: var(--wp-size-border) solid var(--wp-color-border-subtle); overflow: hidden; background: var(--wp-color-bg-input); }
-.preview__ruler.is-empty { align-items: center; justify-content: center; }
-.preview__rulertext { font-size: 9px; color: var(--wp-color-text-faint); font-family: var(--wp-font-family-mono); }
-.preview__tick { flex: 1 1 0; min-width: 1px; }
 /* Die Bühne nimmt den freien Platz; der Kasten darin behält sein Seitenverhältnis
    (Größe kommt aus `fit()`) und wird mittig gesetzt. */
 .preview__stage { flex: 1; min-height: 0; min-width: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
