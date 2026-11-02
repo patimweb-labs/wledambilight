@@ -37,6 +37,29 @@
       "assets/icons/icon-32.png",
       "assets/icons/icon-128.png",
       "assets/icons/icon-256.png"
-    ]
+    ],
+    "linux": {
+      "deb": {
+        "depends": [
+          "libwebkit2gtk-4.1-0",
+          "libayatana-appindicator3-1",
+          "libgtk-3-0",
+          "gstreamer1.0-tools",
+          "gstreamer1.0-pipewire",
+          "gstreamer1.0-plugins-base",
+          "xdg-desktop-portal"
+        ]
+      },
+      "rpm": {
+        "depends": [
+          "webkit2gtk4.1",
+          "libayatana-appindicator-gtk3",
+          "gtk3",
+          "gstreamer1-plugins-base",
+          "pipewire-gstreamer",
+          "xdg-desktop-portal"
+        ]
+      }
+    }
   }
 }

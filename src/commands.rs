@@ -288,6 +288,46 @@ pub fn zone_colors(cfg: &Config, sent: &[Vec<[u8; 3]>]) -> Vec<[u8; 3]> {
         .collect()
 }
 
+/// Gerät testen: WLED antwortet mit Name, Firmware und LED-Anzahl.
+#[tauri::command]
+pub async fn probe_wled(host: String) -> Result<FoundDevice, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::wled::probe(&host, Duration::from_millis(900))
+            .map(|info| FoundDevice::from(discovery::Found::wled(&info)))
+            .ok_or_else(|| format!("{host} antwortet nicht auf der WLED-Schnittstelle"))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Nanoleaf paaren: der Controller muss innerhalb von 30 s blinken (Knopf gedrückt).
+/// Der zurückgegebene Token gehört in die Gerätekonfiguration.
+#[tauri::command]
+pub async fn pair_nanoleaf(host: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || crate::output::nanoleaf::pair(&host))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// Controller eines OpenRGB-SDK-Servers auflisten (lokal oder im Netz).
+#[tauri::command]
+pub async fn list_openrgb(host: String, port: u16) -> Result<Vec<FoundDevice>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let port = if port == 0 {
+            crate::output::openrgb::DEFAULT_PORT
+        } else {
+            port
+        };
+        let controllers = crate::output::openrgb::list(&host, port, Duration::from_millis(1500))?;
+        Ok(controllers
+            .iter()
+            .map(|c| FoundDevice::from(discovery::Found::openrgb(&host, port, c)))
+            .collect::<Vec<_>>())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

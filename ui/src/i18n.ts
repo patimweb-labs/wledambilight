@@ -90,6 +90,21 @@ const de = {
   noZoneHint: "Zone anlegen und auf den Bildschirm ziehen.",
   save: "Übernehmen",
   close: "Schließen",
+  addDevice: "Gerät einrichten",
+  scan: "Netzwerk durchsuchen",
+  scanning: "Suche läuft …",
+  found: "Gefunden",
+  add: "Hinzufügen",
+  edit: "Bearbeiten",
+  probe: "Gerät prüfen",
+  loadControllers: "Controller holen",
+  controller: "Controller",
+  token: "Token",
+  pair: "Paaren",
+  model: "Modell",
+  port: "Port",
+  ledRuler: "LED-Lineal der Zone",
+  noData: "keine Daten",
 };
 
 const en: Record<keyof typeof de, string> = {
@@ -180,6 +195,21 @@ const en: Record<keyof typeof de, string> = {
   noZoneHint: "Create a zone and drag it onto the screen.",
   save: "Apply",
   close: "Close",
+  addDevice: "Set up device",
+  scan: "Search network",
+  scanning: "Searching …",
+  found: "Found",
+  add: "Add",
+  edit: "Edit",
+  probe: "Test device",
+  loadControllers: "Fetch controllers",
+  controller: "Controller",
+  token: "Token",
+  pair: "Pair",
+  model: "Model",
+  port: "Port",
+  ledRuler: "Zone LED ruler",
+  noData: "no data",
 };
 
 const tables = { de, en };

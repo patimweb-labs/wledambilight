@@ -127,6 +127,9 @@ fn main() {
             commands::discover,
             commands::zone_preset,
             commands::device_template,
+            commands::probe_wled,
+            commands::pair_nanoleaf,
+            commands::list_openrgb,
         ])
         .setup(move |app| {
             tray::install(app)?;

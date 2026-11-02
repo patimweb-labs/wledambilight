@@ -5,6 +5,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { Config, FoundDevice, Snapshot, Telemetry, ThemeName } from "./api";
 import { translator } from "./i18n";
+import { zoneRanges as computeRanges } from "./lib/zones";
 
 export const state = reactive({
   config: null as Config | null,
@@ -169,22 +170,56 @@ export function removeZone(index: number) {
   commit();
 }
 
-/**
- * LED-Bereich jeder Zone auf ihrem Gerät: dieselbe Rechnung wie im Kern
- * (`zone_colors`). Ohne Startindex rücken die Zonen eines Geräts aneinander.
- */
-export function zoneRanges(): { start: number; count: number; label: string }[] {
-  const zones = state.config?.zones ?? [];
-  const cursor = new Map<string, number>();
-  return zones.map((zone) => {
-    const start = zone.offset ?? (cursor.get(zone.device) ?? 0);
-    if (zone.enabled && zone.offset === null) {
-      cursor.set(zone.device, start + zone.count);
-    }
-    return {
-      start,
-      count: zone.count,
-      label: zone.count > 1 ? `LED ${start}–${start + zone.count - 1}` : `LED ${start}`,
-    };
-  });
+
+/** WLED am Host fragen: Name, Firmware und LED-Anzahl. */
+export async function probeDevice(host: string): Promise<{ name: string; leds: number; detail: string } | null> {
+  try {
+    const found = await invoke<FoundDevice>("probe_wled", { host });
+    return { name: found.name, leds: found.leds, detail: found.detail };
+  } catch (error) {
+    state.error = String(error);
+    return null;
+  }
+}
+
+/** Nanoleaf paaren: der Controller muss blinken, dann liefert er den Token. */
+export async function pairNanoleaf(host: string): Promise<string | null> {
+  try {
+    state.busy = true;
+    return await invoke<string>("pair_nanoleaf", { host });
+  } catch (error) {
+    state.error = String(error);
+    return null;
+  } finally {
+    state.busy = false;
+  }
+}
+
+/** Controller eines OpenRGB-Servers holen (für die Auswahl im Dialog). */
+export async function listOpenRgb(host: string, port: number): Promise<FoundDevice[]> {
+  try {
+    state.busy = true;
+    return await invoke<FoundDevice[]>("list_openrgb", { host, port });
+  } catch (error) {
+    state.error = String(error);
+    return [];
+  } finally {
+    state.busy = false;
+  }
+}
+
+/** Farben der LEDs, die eine Zone gerade belegt (für das Lineal). */
+export function zoneLeds(index: number): [number, number, number][] {
+  const zone = state.config?.zones[index];
+  if (!zone) return [];
+  const deviceIndex = (state.config?.devices ?? []).findIndex((d) => d.id === zone.device);
+  if (deviceIndex < 0) return [];
+  const strip = state.telemetry?.device_leds?.[deviceIndex] ?? [];
+  const { start, count } = zoneRanges()[index] ?? { start: 0, count: zone.count };
+  return strip.slice(start, start + count);
+}
+
+/** LED-Bereich jeder Zone (getestete Logik in `lib/zones.ts`). */
+export function zoneRanges() {
+  return computeRanges(state.config?.zones ?? []);
 }
