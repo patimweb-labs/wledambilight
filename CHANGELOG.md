@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.5.1](https://github.com/patimweb-labs/wledambilight/compare/v0.5.0...v0.5.1) (2026-11-02)
+
+### Bug Fixes
+
+* **release:** Linux-Job installiert die Tauri-Systempakete — der Bau brach in `pango-sys` ab
+* **release:** `icons/icon.ico` ergänzt, ohne das die Windows-Ressourcendatei nicht entsteht
+* **release:** Windows- und Linux-Pakete fehlten im 0.5.0-Release, nur macOS wurde gebaut
+* **flatpak:** `shared-modules` als Untermodul eingebunden (im CI-Checkout fehlte es) und die
+  Oberfläche wird vor dem Sandkasten gebaut, weil `npm ci` dort abbricht
+* **tauri:** `tauri.conf.json` stand auf 0.3.0; sie folgt jetzt der Version aus `Cargo.toml`
+
 ## [0.5.0](https://github.com/patimweb-labs/wledambilight/compare/v0.4.0...v0.5.0) (2026-11-02)
 
 
