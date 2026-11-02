@@ -152,9 +152,9 @@ function resetPicture() {
               <span class="zonerow__meta">{{ ranges[i]?.label }} · {{ devices.find((d) => d.id === z.device)?.name ?? z.device }}</span>
             </span>
             <span class="zonerow__actions">
-              <button type="button" class="mini" :aria-label="t('up')" @click.stop="move(i, -1)"><UI.WpIcon :icon="IconArrowUp" size="xs" /></button>
-              <button type="button" class="mini" :aria-label="t('down')" @click.stop="move(i, 1)"><UI.WpIcon :icon="IconArrowDown" size="xs" /></button>
-              <button type="button" class="mini" :aria-label="t('remove')" @click.stop="drop(i)"><UI.WpIcon :icon="IconTrash" size="xs" /></button>
+              <UI.WpIconButton :icon="IconArrowUp" :label="t('up')" size="sm" variant="ghost" @press="move(i, -1)" />
+              <UI.WpIconButton :icon="IconArrowDown" :label="t('down')" size="sm" variant="ghost" @press="move(i, 1)" />
+              <UI.WpIconButton :icon="IconTrash" :label="t('remove')" size="sm" variant="ghost" @press="drop(i)" />
             </span>
           </button>
 
@@ -274,7 +274,6 @@ function resetPicture() {
 .zonerow__name { font-size: var(--wp-font-size-sm); }
 .zonerow__meta { font-family: var(--wp-font-family-mono); font-size: 10px; color: var(--wp-color-text-faint); }
 .zonerow__actions { display: flex; gap: 1px; }
-.mini { background: none; border: 0; color: var(--wp-color-text-faint); cursor: pointer; padding: 2px; display: inline-flex; }
 .mini:hover { color: var(--wp-color-text-default); }
 .row { display: flex; gap: var(--wp-space-1); flex-wrap: wrap; margin-top: var(--wp-space-1); }
 .zonerow.is-active { border-color: var(--wp-color-accent-default); }

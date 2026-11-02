@@ -9,6 +9,12 @@ import type { DeviceCfg } from "../api";
 import { addFound, commit, removeDevice, scanNetwork, state, t, zoneRanges } from "../store";
 import DeviceDialog from "./DeviceDialog.vue";
 
+/** Die beiden Uebertragungsarten als Umschalter (vorher zwei Knoepfe von Hand). */
+const protokolle = [
+  { value: "Ddp", label: "DDP 4048" },
+  { value: "Drgb", label: "DRGB 21324" },
+];
+
 const host = ref("");
 const dialogOpen = ref(false);
 const editing = ref<DeviceCfg | null>(null);
@@ -64,12 +70,8 @@ function createManual() {
 <template>
   <UI.WpSidePanel :title="t('devices')" :count="devices.length">
     <template #actions>
-      <button type="button" class="icon" :aria-label="t('scan')" :title="t('scan')" @click="scanNetwork">
-        <UI.WpIcon :icon="IconSearch" size="sm" />
-      </button>
-      <button type="button" class="icon" :aria-label="t('addDevice')" :title="t('addDevice')" @click="openDialog(null)">
-        <UI.WpIcon :icon="IconPlus" size="sm" />
-      </button>
+      <UI.WpIconButton :icon="IconSearch" :label="t('scan')" variant="ghost" @press="scanNetwork" />
+      <UI.WpIconButton :icon="IconPlus" :label="t('addDevice')" variant="ghost" @press="openDialog(null)" />
     </template>
 
     <div v-if="scanning" class="scan"><UI.WpSpinner size="sm" /> <span>{{ t("scanning") }}</span></div>
@@ -78,16 +80,14 @@ function createManual() {
       <div v-for="f in found" :key="f.id" class="scan__row">
         <span class="scan__name">{{ f.name }}</span>
         <span class="scan__detail">{{ f.detail }}</span>
-        <button type="button" class="icon" :aria-label="t('add')" @click="addFound(f)">
-          <UI.WpIcon :icon="IconPlus" size="sm" />
-        </button>
+        <UI.WpIconButton :icon="IconPlus" :label="t('add')" size="sm" @press="addFound(f)" />
       </div>
     </div>
 
     <div class="devices__list">
       <div v-for="device in devices" :key="device.id" class="card">
         <div class="card__head">
-          <button type="button" class="card__name" @click="openDialog(device)">{{ device.name }}</button>
+          <UI.WpLink href="#" :label="device.name" @open="openDialog(device)" />
           <UI.WpSwitch :model-value="device.enabled" @update:model-value="set(device, 'enabled', $event)" />
         </div>
 
@@ -97,12 +97,11 @@ function createManual() {
         </div>
 
         <div class="card__usage">{{ used(device.id) }} / {{ device.led_count }} {{ t("ledsUsed") }}</div>
-        <div class="bar"><span :style="{ width: Math.min(100, (used(device.id) / Math.max(1, device.led_count)) * 100) + '%' }" /></div>
+        <UI.WpProgress :value="Math.min(100, (used(device.id) / Math.max(1, device.led_count)) * 100)" />
 
-        <div v-if="device.kind === 'Wled'" class="segmented">
-          <button type="button" :class="{ 'is-on': device.protocol === 'Ddp' }" @click="set(device, 'protocol', 'Ddp')">DDP 4048</button>
-          <button type="button" :class="{ 'is-on': device.protocol === 'Drgb' }" @click="set(device, 'protocol', 'Drgb')">DRGB 21324</button>
-        </div>
+        <UI.WpToggleGroup v-if="device.kind === 'Wled'" size="sm" :options="protokolle"
+                          :model-value="device.protocol"
+                          @update:model-value="(v: string) => set(device, 'protocol', v as typeof device.protocol)" />
 
         <UI.WpSlider :model-value="Math.round(device.brightness * 100)" :min="0" :max="100" :label="t('brightness')" suffix=" %"
                      @update:model-value="set(device, 'brightness', $event / 100)" />
@@ -144,7 +143,6 @@ function createManual() {
   border-right: var(--wp-size-border) solid var(--wp-color-border-subtle);
   min-height: 0;
 }
-.icon { background: none; border: 0; color: var(--wp-color-text-muted); cursor: pointer; padding: 3px; display: inline-flex; }
 .icon:hover { color: var(--wp-color-text-default); }
 .scan { display: flex; align-items: center; gap: var(--wp-space-2); padding: 0 var(--wp-space-3) var(--wp-space-2); font-size: var(--wp-font-size-xs); color: var(--wp-color-text-muted); }
 .scan--list { flex-direction: column; align-items: stretch; gap: 2px; }
@@ -155,17 +153,11 @@ function createManual() {
 .devices__list { flex: 1; overflow-y: auto; padding: 0 var(--wp-space-2) var(--wp-space-2); display: flex; flex-direction: column; gap: var(--wp-space-2); }
 .card { display: flex; flex-direction: column; gap: 6px; padding: var(--wp-space-2); background: var(--wp-color-bg-raised); border: var(--wp-size-border) solid var(--wp-color-border-subtle); }
 .card__head { display: flex; align-items: center; justify-content: space-between; gap: var(--wp-space-2); }
-.card__name { background: none; border: 0; padding: 0; color: var(--wp-color-text-default); font: inherit; font-size: var(--wp-font-size-sm); font-weight: var(--wp-font-weight-medium); cursor: pointer; text-align: left; }
 .card__name:hover { color: var(--wp-color-accent-default); }
 .card__row2 { display: flex; align-items: center; justify-content: space-between; gap: var(--wp-space-2); }
 .card__host { font-family: var(--wp-font-family-mono); font-size: var(--wp-font-size-xs); color: var(--wp-color-text-faint); }
 .card__usage { font-size: var(--wp-font-size-xs); color: var(--wp-color-text-muted); }
 .card__actions { display: flex; gap: var(--wp-space-1); flex-wrap: wrap; margin-top: 2px; }
-.bar { height: 3px; background: var(--wp-color-bg-input); }
-.bar span { display: block; height: 100%; background: var(--wp-color-accent-default); }
-.segmented { display: flex; gap: 2px; }
-.segmented button { flex: 1; background: var(--wp-color-bg-input); border: var(--wp-size-border) solid var(--wp-color-border-subtle); color: var(--wp-color-text-muted); font: inherit; font-size: var(--wp-font-size-xs); padding: 4px; cursor: pointer; }
-.segmented button.is-on { border-color: var(--wp-color-accent-default); color: var(--wp-color-text-default); }
 .devices__add { padding: var(--wp-space-2) var(--wp-space-3) var(--wp-space-3); border-top: var(--wp-size-border) solid var(--wp-color-border-subtle); display: flex; flex-direction: column; gap: 4px; }
 .devices__addlabel { font-size: var(--wp-font-size-xs); color: var(--wp-color-text-faint); }
 .devices__addrow { display: flex; gap: var(--wp-space-1); }
