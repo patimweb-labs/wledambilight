@@ -63,7 +63,10 @@ modules:
         HOME: /tmp
     build-commands:
       - cargo --offline fetch --manifest-path Cargo.toml --verbose
-      - cargo --offline build --release --locked --verbose
+      # `custom-protocol` ist Pflicht: ohne das Feature bettet Tauri die
+      # gebaute Oberflaeche nicht ein, das Fenster fragt stattdessen die
+      # devUrl ab und bleibt auf der Hintergrundfarbe stehen (schwarz).
+      - cargo --offline build --release --locked --features custom-protocol --verbose
       - install -Dm755 target/release/wled-ambilight ${FLATPAK_DEST}/bin/wled-ambilight
       - install -Dm644 packaging/linux/${FLATPAK_ID}.desktop ${FLATPAK_DEST}/share/applications/${FLATPAK_ID}.desktop
       - install -Dm644 packaging/linux/${FLATPAK_ID}.metainfo.xml ${FLATPAK_DEST}/share/metainfo/${FLATPAK_ID}.metainfo.xml
