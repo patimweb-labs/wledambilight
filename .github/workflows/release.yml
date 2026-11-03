@@ -80,6 +80,10 @@ jobs:
   # ---------------------------------------------------------------- Linux
   linux:
     needs: prepare
+    # Ohne eigenes always() überspringt GitHub diesen Job, sobald im Lauf schon
+    # ein Job übersprungen wurde (`release-please` bei Tag-Push und
+    # workflow_dispatch). Ergebnis: keine Pakete, stiller Fehlschlag.
+    if: always() && needs.prepare.result == 'success'
     name: Linux (${{ matrix.arch }})
     strategy:
       fail-fast: false
@@ -141,6 +145,7 @@ jobs:
 
   flatpak:
     needs: prepare
+    if: always() && needs.prepare.result == 'success'
     name: Flatpak
     runs-on: ubuntu-latest
     container:
@@ -177,6 +182,7 @@ jobs:
   # ---------------------------------------------------------------- Windows
   windows:
     needs: prepare
+    if: always() && needs.prepare.result == 'success'
     name: Windows
     runs-on: windows-latest
     env:
@@ -216,6 +222,7 @@ jobs:
   # ---------------------------------------------------------------- macOS
   macos:
     needs: prepare
+    if: always() && needs.prepare.result == 'success'
     name: macOS (universal)
     runs-on: macos-latest
     env:
@@ -310,6 +317,18 @@ jobs:
         with:
           path: dist
           merge-multiple: true
+      # Ohne diesen Schritt bricht der Job an `sha256sum *` mit "No such file
+      # or directory" ab und verschweigt, dass gar keine Pakete gebaut wurden.
+      - name: Pakete vorhanden
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          shopt -s nullglob
+          files=(dist/*)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "::error::Keine Pakete gebaut — die Bau-Jobs sind fehlgeschlagen oder übersprungen."
+            exit 1
+          fi
       - name: Checksums
         working-directory: dist
         run: |
