@@ -61,9 +61,6 @@ screencapturekit = "11"
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
-[target.'cfg(target_os = "windows")'.build-dependencies]
-winresource = "0.1"
-
 [profile.release]
 lto = "thin"
 codegen-units = 1
