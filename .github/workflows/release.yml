@@ -374,22 +374,28 @@ jobs:
     if: always() && needs.prepare.result == 'success'
     runs-on: ubuntu-latest
     steps:
+      # Alle Artefakte abholen, auch `ui-dist` und `flatpak-cargo-sources` aus
+      # dem Job `ui` — die gehören aber nicht in das Release. Deshalb erst in
+      # Unterordner laden und dann nur die Pakete einsammeln.
       - uses: actions/download-artifact@v8
         with:
-          path: dist
-          merge-multiple: true
-      # Ohne diesen Schritt bricht der Job an `sha256sum *` mit "No such file
-      # or directory" ab und verschweigt, dass gar keine Pakete gebaut wurden.
-      - name: Pakete vorhanden
+          path: dist/_raw
+      - name: Pakete einsammeln
         run: |
           set -euo pipefail
           mkdir -p dist
           shopt -s nullglob
-          files=(dist/*)
-          if [ ${#files[@]} -eq 0 ]; then
+          for f in dist/_raw/*/*; do
+            case "$f" in
+              *.deb|*.rpm|*.dmg|*.exe|*.zip|*.flatpak|*.tar.gz) cp "$f" dist/ ;;
+            esac
+          done
+          rm -rf dist/_raw
+          if ! compgen -G "dist/*" >/dev/null; then
             echo "::error::Keine Pakete gebaut — die Bau-Jobs sind fehlgeschlagen oder übersprungen."
             exit 1
           fi
+          ls -la dist
       - name: Checksums
         working-directory: dist
         run: |
