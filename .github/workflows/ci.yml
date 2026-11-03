@@ -12,9 +12,10 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
-  # Die Oberfläche ist eine Web-Anwendung. Sie muss vor dem Rust-Build fertig sein,
-  # weil Tauri die Dateien in das Programm einbettet.
-  WPM_UI_DIR: ${{ github.workspace }}/weppelmann-ui
+  # Kein WPM_UI_DIR: ui/vite.config.ts nimmt dann den Nachbarordner
+  # `../../weppelmann-ui` — genau den, den auch `npm install` über die
+  # file:-Verweise in ui/package.json anlegt. Ein Env-Wert hier hat nach dem
+  # Verschieben der Bibliothek auf einen Pfad gezeigt, den es nicht mehr gab.
 
 jobs:
   fmt:
