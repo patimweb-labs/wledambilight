@@ -61,9 +61,6 @@ screencapturekit = "11"
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
-[target.'cfg(target_os = "windows")'.build-dependencies]
-winresource = "0.1"
-
 [profile.release]
 lto = "thin"
 codegen-units = 1
@@ -92,3 +89,30 @@ assets = [
     ["assets/icons/icon-256.png", "usr/share/icons/hicolor/256x256/apps/io.github.smotherer007.WledAmbilight.png", "644"],
     ["README.md", "usr/share/doc/wled-ambilight/README.md", "644"],
 ]
+
+# cargo-generate-rpm bricht ohne diesen Abschnitt mit
+# "Missing field: package.metadata.generate-rpm" ab. `dest` ist dort ein
+# absoluter Pfad im Zielsystem, kein Zielverzeichnis wie bei cargo-deb.
+[package.metadata.generate-rpm]
+name = "wled-ambilight"
+summary = "Lightweight ambilight: screen colours to WLED, OpenRGB, Razer Chroma, Govee and Nanoleaf"
+license = "GPL-3.0-or-later"
+url = "https://github.com/patimweb-labs/wledambilight"
+vendor = "Patrick Weppelmann"
+group = "Applications/Multimedia"
+assets = [
+    { source = "target/release/wled-ambilight", dest = "/usr/bin/wled-ambilight", mode = "755" },
+    { source = "packaging/linux/io.github.smotherer007.WledAmbilight.desktop", dest = "/usr/share/applications/io.github.smotherer007.WledAmbilight.desktop", mode = "644" },
+    { source = "packaging/linux/io.github.smotherer007.WledAmbilight.metainfo.xml", dest = "/usr/share/metainfo/io.github.smotherer007.WledAmbilight.metainfo.xml", mode = "644" },
+    { source = "assets/icon.svg", dest = "/usr/share/icons/hicolor/scalable/apps/io.github.smotherer007.WledAmbilight.svg", mode = "644" },
+    { source = "assets/icons/icon-256.png", dest = "/usr/share/icons/hicolor/256x256/apps/io.github.smotherer007.WledAmbilight.png", mode = "644" },
+    { source = "README.md", dest = "/usr/share/doc/wled-ambilight/README.md", mode = "644" },
+]
+
+[package.metadata.generate-rpm.requires]
+"webkit2gtk4.1" = "*"
+"libayatana-appindicator-gtk3" = "*"
+"gtk3" = "*"
+"gstreamer1-plugins-base" = "*"
+"pipewire-gstreamer" = "*"
+"xdg-desktop-portal" = "*"
