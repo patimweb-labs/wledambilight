@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.5.3](https://github.com/patimweb-labs/wledambilight/compare/v0.5.2...v0.5.3) (2026-11-03)
+
+
+### Bug fixes
+
+* **flatpak:** custom-protocol beim Bau setzen ([#19](https://github.com/patimweb-labs/wledambilight/issues/19)) ([f38cba0](https://github.com/patimweb-labs/wledambilight/commit/f38cba07bcc99c78536e1caa1d4ba450947896de))
+* **icons:** Zeichen aus dem Raster ueber markenwerk erzeugen ([#20](https://github.com/patimweb-labs/wledambilight/issues/20)) ([b94209a](https://github.com/patimweb-labs/wledambilight/commit/b94209abd70f9534205d6d62f204c71aadab1682))
+* **release:** Tag-Push baut wieder Pakete, Versionen werden geprüft ([#22](https://github.com/patimweb-labs/wledambilight/issues/22)) ([2952181](https://github.com/patimweb-labs/wledambilight/commit/29521817ccfb2233d21a848b0206f243013b4839))
+
 ## [0.5.2](https://github.com/patimweb-labs/wledambilight/compare/v0.5.1...v0.5.2) (2026-11-02)
 
 
