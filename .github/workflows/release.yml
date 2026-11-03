@@ -77,13 +77,63 @@ jobs:
           gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 ||
             gh release create "$TAG" -R "$GITHUB_REPOSITORY" --title "$TAG" --generate-notes --verify-tag
 
+  # Die Oberfläche wird einmal hier gebaut und an alle Plattformen verteilt.
+  # `--features custom-protocol` bettet sie ein; ohne sie zeigt das Paket auf
+  # `devUrl` (localhost:1420) und das Fenster bleibt schwarz.
+  ui:
+    needs: prepare
+    if: always() && needs.prepare.result == 'success'
+    name: Oberfläche
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+      # Öffentliches Repository, kein Token nötig.
+      - name: Oberflächen-Bibliothek
+        uses: actions/checkout@v7
+        with:
+          repository: Smotherer007/weppelmann-ui
+          path: weppelmann-ui
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Tokens bauen
+        working-directory: weppelmann-ui
+        run: |
+          npm install --no-audit --no-fund
+          npm run -w @weppelmann/tokens build
+      # `ui/package.json` verweist per `file:../../weppelmann-ui` auf die
+      # Bibliothek **neben** dem Projekt.
+      - name: Bibliothek neben das Projekt legen
+        shell: bash
+        run: mv "$GITHUB_WORKSPACE/weppelmann-ui" "$GITHUB_WORKSPACE/../weppelmann-ui"
+      - name: Oberfläche bauen
+        run: |
+          npm ci --no-audit --no-fund
+          npm --prefix ui run build
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ui-dist
+          path: ui/dist
+      # Der Offline-Crate-Plan für Flatpak braucht Python mit aiohttp/tomlkit;
+      # im Flatpak-Builder-Container fehlt beides.
+      - name: Crate-Quellen für Flatpak
+        run: |
+          python3 -m pip install --quiet aiohttp tomlkit
+          bash packaging/flatpak/update-cargo-sources.sh
+      - uses: actions/upload-artifact@v7
+        with:
+          name: flatpak-cargo-sources
+          path: packaging/flatpak/cargo-sources.json
+
   # ---------------------------------------------------------------- Linux
   linux:
-    needs: prepare
+    needs: [prepare, ui]
     # Ohne eigenes always() überspringt GitHub diesen Job, sobald im Lauf schon
     # ein Job übersprungen wurde (`release-please` bei Tag-Push und
     # workflow_dispatch). Ergebnis: keine Pakete, stiller Fehlschlag.
-    if: always() && needs.prepare.result == 'success'
+    if: always() && needs.prepare.result == 'success' && needs.ui.result == 'success'
     name: Linux (${{ matrix.arch }})
     strategy:
       fail-fast: false
@@ -116,8 +166,12 @@ jobs:
             librsvg2-dev patchelf
       - name: Stamp release date into the metainfo
         run: sed -i -E "s/(<release version=\"$VERSION\" date=\")[0-9-]+/\1$(date -u +%F)/" packaging/linux/*.metainfo.xml
+      - uses: actions/download-artifact@v8
+        with:
+          name: ui-dist
+          path: ui/dist
       - name: Build
-        run: cargo build --release --locked
+        run: cargo build --release --locked --features custom-protocol
       - name: Package
         run: |
           set -euo pipefail
@@ -144,8 +198,8 @@ jobs:
           path: dist/*
 
   flatpak:
-    needs: prepare
-    if: always() && needs.prepare.result == 'success'
+    needs: [prepare, ui]
+    if: always() && needs.prepare.result == 'success' && needs.ui.result == 'success'
     name: Flatpak
     runs-on: ubuntu-latest
     container:
@@ -156,18 +210,17 @@ jobs:
         with:
           ref: ${{ needs.prepare.outputs.tag }}
           submodules: recursive
-      # Die Oberfläche wird VOR dem Flatpak-Bau erzeugt: npm bricht im
-      # Bau-Sandkasten der node22-Extension bei diesem Workspace ab, deshalb
-      # liegt `ui/dist` beim Start des Sandkastens schon vor.
-      - name: Oberfläche bauen
-        run: |
-          dnf install -y nodejs npm
-          npm --prefix ui ci --no-audit --no-fund
-          npm --prefix ui run build
-      - name: Offline crate list
-        run: |
-          dnf install -y python3-aiohttp python3-tomlkit || pip3 install aiohttp tomlkit
-          bash packaging/flatpak/update-cargo-sources.sh
+      # Oberfläche und Offline-Crate-Liste entstehen im Job `ui`: der
+      # Builder-Container hat weder npm noch dnf (`dnf: command not found`),
+      # und `npm ci` scheitert dort ohnehin am fehlenden Lockfile in `ui/`.
+      - uses: actions/download-artifact@v8
+        with:
+          name: ui-dist
+          path: ui/dist
+      - uses: actions/download-artifact@v8
+        with:
+          name: flatpak-cargo-sources
+          path: packaging/flatpak
       - name: Stamp release date into the metainfo
         env:
           VERSION: ${{ needs.prepare.outputs.version }}
@@ -181,8 +234,8 @@ jobs:
 
   # ---------------------------------------------------------------- Windows
   windows:
-    needs: prepare
-    if: always() && needs.prepare.result == 'success'
+    needs: [prepare, ui]
+    if: always() && needs.prepare.result == 'success' && needs.ui.result == 'success'
     name: Windows
     runs-on: windows-latest
     env:
@@ -193,8 +246,12 @@ jobs:
           ref: ${{ needs.prepare.outputs.tag }}
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - uses: actions/download-artifact@v8
+        with:
+          name: ui-dist
+          path: ui/dist
       - name: Build
-        run: cargo build --release --locked
+        run: cargo build --release --locked --features custom-protocol
       - name: Portable zip
         shell: pwsh
         run: |
@@ -221,8 +278,8 @@ jobs:
 
   # ---------------------------------------------------------------- macOS
   macos:
-    needs: prepare
-    if: always() && needs.prepare.result == 'success'
+    needs: [prepare, ui]
+    if: always() && needs.prepare.result == 'success' && needs.ui.result == 'success'
     name: macOS (universal)
     runs-on: macos-latest
     env:
@@ -244,10 +301,14 @@ jobs:
         with:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
       - uses: Swatinem/rust-cache@v2
+      - uses: actions/download-artifact@v8
+        with:
+          name: ui-dist
+          path: ui/dist
       - name: Build (arm64 + x86_64)
         run: |
-          cargo build --release --locked --target aarch64-apple-darwin
-          cargo build --release --locked --target x86_64-apple-darwin
+          cargo build --release --locked --features custom-protocol --target aarch64-apple-darwin
+          cargo build --release --locked --features custom-protocol --target x86_64-apple-darwin
       - name: App bundle
         run: |
           set -euo pipefail
