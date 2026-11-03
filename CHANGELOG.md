@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.5](https://github.com/patimweb-labs/wledambilight/compare/v0.5.4...v0.5.5) (2026-11-03)
+
+
+### Bug fixes
+
+* **release:** nur Pakete an das Release hängen ([#25](https://github.com/patimweb-labs/wledambilight/issues/25)) ([4ee336b](https://github.com/patimweb-labs/wledambilight/commit/4ee336b2587ed49eb984f52f5917598524cdfa9b))
+
 ## [0.5.4](https://github.com/patimweb-labs/wledambilight/compare/v0.5.3...v0.5.4) (2026-11-03)
 
 
