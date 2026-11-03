@@ -42,15 +42,14 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
-      # Die geteilte Komponentenbibliothek liegt in einem eigenen, privaten
-      # Repository. Ohne diesen Schritt fehlen Tokens und Komponenten. Der
-      # Workflow braucht dafür das Secret WPM_UI_TOKEN (Repo-Lese-Recht).
+      # Die geteilte Komponentenbibliothek ist öffentlich; ein Token ist nicht
+      # nötig (und war ohne gesetztes Secret die Ursache für den Abbruch
+      # "Input required and not supplied: token").
       - name: Oberflächen-Bibliothek
         uses: actions/checkout@v7
         with:
           repository: Smotherer007/weppelmann-ui
           path: weppelmann-ui
-          token: ${{ secrets.WPM_UI_TOKEN }}
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -69,6 +68,12 @@ jobs:
         run: |
           npm install --no-audit --no-fund
           npm run -w @weppelmann/tokens build
+      # `ui/package.json` verweist per `file:../../weppelmann-ui` auf die
+      # Bibliothek **neben** dem Projekt. Im Lauf liegt sie im Projekt, deshalb
+      # wird sie erst nach dem Bau der Tokens einen Ordner höher geschoben.
+      - name: Bibliothek neben das Projekt legen
+        shell: bash
+        run: mv "$GITHUB_WORKSPACE/weppelmann-ui" "$GITHUB_WORKSPACE/../weppelmann-ui"
       - name: Oberfläche bauen
         run: |
           npm install --no-audit --no-fund
@@ -80,7 +85,7 @@ jobs:
       - name: Tests
         run: cargo test --locked
       - name: Build
-        run: cargo build --release --locked
+        run: cargo build --release --locked --features custom-protocol
 
   metadata:
     name: Linux metadata
