@@ -2,6 +2,15 @@
 
 ## [0.5.2](https://github.com/patimweb-labs/wledambilight/compare/v0.5.1...v0.5.2) (2026-11-02)
 
+
+### Bug fixes
+
+* **flatpak:** custom-protocol beim Bau setzen ([#19](https://github.com/patimweb-labs/wledambilight/issues/19)) ([f38cba0](https://github.com/patimweb-labs/wledambilight/commit/f38cba07bcc99c78536e1caa1d4ba450947896de))
+* **icons:** Zeichen aus dem Raster ueber markenwerk erzeugen ([#20](https://github.com/patimweb-labs/wledambilight/issues/20)) ([b94209a](https://github.com/patimweb-labs/wledambilight/commit/b94209abd70f9534205d6d62f204c71aadab1682))
+* **release:** Linux-, Windows- und Flatpak-Pakete wieder baubar ([#16](https://github.com/patimweb-labs/wledambilight/issues/16)) ([0786ff5](https://github.com/patimweb-labs/wledambilight/commit/0786ff51c36a899b4ed8fdcdd5d370a1eb7c866d))
+
+## [0.5.2](https://github.com/patimweb-labs/wledambilight/compare/v0.5.1...v0.5.2) (2026-11-02)
+
 ### Bug Fixes
 
 * Release-Pipeline repariert: Linux-Pakete, Windows-Paket und Flatpak entstehen wieder
