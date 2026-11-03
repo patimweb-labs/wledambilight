@@ -93,3 +93,30 @@ jobs:
           sudo apt-get install -y -qq desktop-file-utils appstream
           desktop-file-validate packaging/linux/*.desktop
           appstreamcli validate --no-net packaging/linux/*.metainfo.xml
+
+  versions:
+    name: Versionen
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # Alle Stellen, die eine Release-Pull-Request setzt, müssen zusammenpassen.
+      # Wer von Hand nur `Cargo.toml` anhebt (und taggt), lässt das Manifest auf
+      # der alten Version stehen; release-please rechnet die Version dann noch
+      # einmal aus und scheitert am Ende mit "Duplicate release tag".
+      - name: Versionen stimmen überein
+        run: |
+          set -euo pipefail
+          package=$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -1)
+          lock=$(sed -n '/^name = "wled-ambilight"$/,/^version/p' Cargo.lock | sed -n 's/^version = "\(.*\)"$/\1/p' | head -1)
+          manifest=$(jq -r '.["."]' .release-please-manifest.json)
+          tauri=$(jq -r '.version' tauri.conf.json)
+          metainfo=$(sed -n 's/.*<release version="\([^"]*\)".*/\1/p' packaging/linux/*.metainfo.xml | head -1)
+          status=0
+          for pair in "Cargo.toml:$package" "Cargo.lock:$lock" "Manifest:$manifest" "tauri.conf.json:$tauri" "metainfo:$metainfo"; do
+            printf '%-20s %s\n' "${pair%%:*}" "${pair#*:}"
+            [ "${pair#*:}" = "$package" ] || status=1
+          done
+          if [ "$status" -ne 0 ]; then
+            echo "::error::Versionen weichen von Cargo.toml ($package) ab — release-please rechnet sonst dieselbe Version erneut aus."
+            exit 1
+          fi
