@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.4](https://github.com/patimweb-labs/wledambilight/compare/v0.5.3...v0.5.4) (2026-11-03)
+
+
+### Bug fixes
+
+* **release:** Windows, RPM und Flatpak bauen wieder, Oberfläche wird eingebettet ([#23](https://github.com/patimweb-labs/wledambilight/issues/23)) ([d8f0b55](https://github.com/patimweb-labs/wledambilight/commit/d8f0b5515f0f3642fd9b50bcb7b34fd60d0cd012))
+
 ## [0.5.3](https://github.com/patimweb-labs/wledambilight/compare/v0.5.2...v0.5.3) (2026-11-03)
 
 
