@@ -280,41 +280,45 @@ pub fn device_template(host: String, name: String, leds: u16) -> DeviceCfg {
 /// Reine Funktion, damit sie ohne Fenster, ohne Pipeline und ohne Gerät prüfbar
 /// ist — die Logik ist der Teil, in dem Fehler wehtun (Startindex, Offsets,
 /// deaktivierte Zonen).
+///
+/// Die Startindizes kommen aus `Config::zone_starts`, derselben Quelle wie im
+/// Sampler. `sent` ist die Leitungsreihenfolge: bei `reverse` liegt LED 0 am
+/// Ende des Puffers, bei `bgr` sind Rot und Blau getauscht. Beides wird hier
+/// zurückgerechnet, damit die Vorschau die Farbe des Bildes zeigt.
 pub fn zone_colors(cfg: &Config, sent: &[Vec<[u8; 3]>]) -> Vec<[u8; 3]> {
-    let mut cursor: std::collections::HashMap<&str, u16> = std::collections::HashMap::new();
+    let starts = cfg.zone_starts();
     cfg.zones
         .iter()
-        .map(|zone| {
-            let Some(device_index) = cfg.devices.iter().position(|d| d.id == zone.device) else {
-                return [0, 0, 0];
-            };
-            let Some(colors) = sent.get(device_index) else {
-                return [0, 0, 0];
-            };
+        .zip(starts)
+        .map(|(zone, start)| {
             if !zone.enabled {
                 return [0, 0, 0];
             }
-            let start = zone.offset.unwrap_or_else(|| {
-                let next = cursor.entry(zone.device.as_str()).or_insert(0);
-                let at = *next;
-                if zone.enabled {
-                    *next = at.saturating_add(zone.count);
-                }
-                at
-            }) as usize;
-            let end = (start + zone.count as usize).min(colors.len());
+            let Some(device_index) = cfg.devices.iter().position(|d| d.id == zone.device) else {
+                return [0, 0, 0];
+            };
+            let device = &cfg.devices[device_index];
+            let Some(colors) = sent.get(device_index) else {
+                return [0, 0, 0];
+            };
+            let len = colors.len();
+            let start = start as usize;
+            let end = (start + zone.count as usize).min(len);
             if start >= end {
                 return [0, 0, 0];
             }
-            let slice = &colors[start..end];
-            let n = slice.len() as u32;
-            let sum = slice.iter().fold([0u32; 3], |acc, c| {
-                [
-                    acc[0] + c[0] as u32,
-                    acc[1] + c[1] as u32,
-                    acc[2] + c[2] as u32,
-                ]
-            });
+            let mut sum = [0u32; 3];
+            for led in start..end {
+                let wire = if device.reverse { len - 1 - led } else { led };
+                let mut c = colors[wire];
+                if device.bgr {
+                    c.swap(0, 2);
+                }
+                for k in 0..3 {
+                    sum[k] += c[k] as u32;
+                }
+            }
+            let n = (end - start) as u32;
             [(sum[0] / n) as u8, (sum[1] / n) as u8, (sum[2] / n) as u8]
         })
         .collect()
@@ -532,6 +536,44 @@ mod tests {
         };
         let sent = vec![vec![[9, 9, 9], [9, 9, 9]]];
         assert_eq!(zone_colors(&cfg, &sent), vec![[0, 0, 0]]);
+    }
+
+    #[test]
+    fn a_packed_zone_continues_after_a_pinned_one() {
+        // dieselbe Regel wie im Sampler: nach dem festen Block 2..4 folgt 4..6
+        let cfg = Config {
+            devices: vec![device("d1", 6)],
+            zones: vec![zone("d1", 2, Some(2), true), zone("d1", 2, None, true)],
+            ..Config::default()
+        };
+        let sent = vec![vec![
+            [1, 1, 1],
+            [1, 1, 1],
+            [2, 2, 2],
+            [2, 2, 2],
+            [3, 3, 3],
+            [3, 3, 3],
+        ]];
+        assert_eq!(cfg.zone_starts(), vec![2, 4]);
+        assert_eq!(zone_colors(&cfg, &sent), vec![[2, 2, 2], [3, 3, 3]]);
+    }
+
+    #[test]
+    fn reverse_and_bgr_are_undone_for_the_preview() {
+        // Gerät mit vier LEDs, umgedreht verdrahtet und BGR: die Engine schickt
+        // logisch [rot, rot, blau, blau] als [blau, blau, rot, rot] in BGR.
+        let mut d = device("d1", 4);
+        d.reverse = true;
+        d.bgr = true;
+        let cfg = Config {
+            devices: vec![d],
+            zones: vec![zone("d1", 2, None, true), zone("d1", 2, None, true)],
+            ..Config::default()
+        };
+        let red_bgr = [0, 0, 255];
+        let blue_bgr = [255, 0, 0];
+        let sent = vec![vec![blue_bgr, blue_bgr, red_bgr, red_bgr]];
+        assert_eq!(zone_colors(&cfg, &sent), vec![[255, 0, 0], [0, 0, 255]]);
     }
 
     #[test]

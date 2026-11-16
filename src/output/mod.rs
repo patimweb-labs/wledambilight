@@ -35,6 +35,8 @@ pub trait Output: Send {
     fn status(&self) -> Status {
         Status::Ok
     }
+    /// Start closing the connection without waiting (app exit).
+    fn begin_shutdown(&mut self) {}
     /// Close the connection and wait up to `wait` for it (app exit).
     fn shutdown(&mut self, _wait: Duration) {}
 }
@@ -58,6 +60,9 @@ struct WledOutput(crate::wled::Sender);
 impl Output for WledOutput {
     fn send(&mut self, colors: &[[u8; 3]]) {
         self.0.send(colors);
+    }
+    fn status(&self) -> Status {
+        self.0.status()
     }
 }
 
@@ -190,12 +195,14 @@ impl Output for Threaded {
         self.status.lock().unwrap().clone()
     }
 
+    fn begin_shutdown(&mut self) {
+        let mut g = self.slot.0.lock().unwrap();
+        g.stop = true;
+        self.slot.1.notify_all();
+    }
+
     fn shutdown(&mut self, wait: Duration) {
-        {
-            let mut g = self.slot.0.lock().unwrap();
-            g.stop = true;
-            self.slot.1.notify_all();
-        }
+        self.begin_shutdown();
         let deadline = Instant::now() + wait;
         while !self.stopped.load(Ordering::Relaxed) && Instant::now() < deadline {
             std::thread::sleep(Duration::from_millis(10));

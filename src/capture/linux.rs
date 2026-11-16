@@ -107,6 +107,59 @@ fn spawn_gst(fd: i32, node: u32, width: u32, height: u32) -> std::io::Result<Chi
     cmd.spawn()
 }
 
+/// Frame width handed to GStreamer: never wider than the screen, and a
+/// multiple of four. GStreamer pads every RGB row to four bytes; with any
+/// other width the rows we read from the pipe would drift apart.
+fn gst_width(want: u32, screen_w: u32) -> u32 {
+    let w = if screen_w > 0 {
+        want.min(screen_w)
+    } else {
+        want
+    };
+    w.max(4) & !3
+}
+
+/// The GStreamer child process, killable from a watcher thread.
+///
+/// PipeWire only delivers frames when the screen changes, so a blocking read
+/// can wait forever on a still picture. Killing the child ends that read
+/// as soon as the capture is asked to stop.
+#[derive(Clone, Default)]
+struct ChildPid(std::sync::Arc<std::sync::Mutex<Option<u32>>>);
+
+impl ChildPid {
+    fn set(&self, child: &Child) {
+        *self.0.lock().unwrap() = Some(child.id());
+    }
+    /// Forget the pid *before* the child is reaped, so the watcher can never
+    /// signal a recycled pid.
+    fn reap(&self, child: &mut Child) {
+        *self.0.lock().unwrap() = None;
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+    fn watch(&self, h: Handles, done: std::sync::Arc<std::sync::atomic::AtomicBool>) {
+        let pid = self.clone();
+        let _ = std::thread::Builder::new()
+            .name("capture-watch".into())
+            .spawn(move || {
+                use std::sync::atomic::Ordering;
+                while !done.load(Ordering::Relaxed) {
+                    if h.stopped() {
+                        if let Some(p) = *pid.0.lock().unwrap() {
+                            // SAFETY: plain kill(2) on our own, not yet reaped child
+                            unsafe {
+                                libc::kill(p as libc::pid_t, libc::SIGKILL);
+                            }
+                        }
+                        break;
+                    }
+                    std::thread::sleep(Duration::from_millis(50));
+                }
+            });
+    }
+}
+
 pub fn run(opts: CaptureOptions, h: Handles) {
     h.set_status(CaptureStatus::Starting);
     let rt = match tokio::runtime::Builder::new_current_thread()
@@ -127,7 +180,7 @@ pub fn run(opts: CaptureOptions, h: Handles) {
     h.set_screen(sw, sh);
 
     let raw = stream.fd.as_raw_fd();
-    let mut width = h.width().max(2);
+    let mut width = gst_width(h.width(), sw);
     let mut fh = frame_height(width, sw, sh);
     let mut child = match spawn_gst(raw, stream.node, width, fh) {
         Ok(c) => c,
@@ -141,7 +194,13 @@ pub fn run(opts: CaptureOptions, h: Handles) {
         ))
         }
     };
+    let pid = ChildPid::default();
+    pid.set(&child);
+    let done = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    pid.watch(h.clone(), done.clone());
     let Some(mut stdout) = child.stdout.take() else {
+        pid.reap(&mut child);
+        done.store(true, std::sync::atomic::Ordering::Relaxed);
         return h.fail("no gst stdout");
     };
     h.set_status(CaptureStatus::Running { w: width, h: fh });
@@ -153,17 +212,17 @@ pub fn run(opts: CaptureOptions, h: Handles) {
         }
         // a new resolution arrives as a width change: only GStreamer is rebuilt,
         // the portal session and its PipeWire node stay alive
-        let want = h.width().max(2);
+        let want = gst_width(h.width(), sw);
         if want != width {
             width = want;
             fh = frame_height(width, sw, sh);
             frame_len = (width * fh * 3) as usize;
-            let _ = child.kill();
-            let _ = child.wait();
+            pid.reap(&mut child);
             match spawn_gst(raw, stream.node, width, fh) {
                 Ok(mut c) => match c.stdout.take() {
                     Some(s) => {
                         stdout = s;
+                        pid.set(&c);
                         child = c;
                         h.set_status(CaptureStatus::Running { w: width, h: fh });
                     }
@@ -196,10 +255,25 @@ pub fn run(opts: CaptureOptions, h: Handles) {
             }
         }
     }
-    let _ = child.kill();
-    let _ = child.wait();
+    pid.reap(&mut child);
+    done.store(true, std::sync::atomic::Ordering::Relaxed);
     // keep the portal session alive until the very end
     drop(stream.fd);
     drop(stream._session);
     std::thread::sleep(Duration::from_millis(10));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::gst_width;
+
+    #[test]
+    fn gst_rows_stay_aligned_and_never_exceed_the_screen() {
+        assert_eq!(gst_width(320, 2560), 320);
+        assert_eq!(gst_width(322, 2560), 320, "multiple of four");
+        assert_eq!(gst_width(3840, 1920), 1920, "native = screen width");
+        assert_eq!(gst_width(3840, 1366), 1364);
+        assert_eq!(gst_width(3840, 0), 3840, "unknown screen size");
+        assert_eq!(gst_width(1, 0), 4);
+    }
 }

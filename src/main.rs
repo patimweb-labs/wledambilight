@@ -9,7 +9,6 @@
 //! The window is a web application (Vue). This file starts the pipeline, the tray
 //! and the command layer; the user interface lives in `ui/`.
 
-use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use tauri::{Emitter, Manager};
@@ -36,7 +35,7 @@ Options:
 ";
 
 fn headless() -> ! {
-    let mut cfg = Config::load();
+    let cfg = Config::load();
     i18n::init(&cfg.settings.language);
     if cfg.devices.is_empty() {
         eprintln!(
@@ -44,13 +43,58 @@ fn headless() -> ! {
             config::config_path().display()
         );
     }
+    let signals = quit_signals::block();
+    // The pipeline writes new portal tokens to disk itself.
     let pipeline = worker::Pipeline::start(&cfg);
-    loop {
-        std::thread::sleep(Duration::from_secs(2));
-        let token = pipeline.shared.restore_token();
-        if token.is_some() && token != cfg.settings.restore_token {
-            cfg.settings.restore_token = token;
-            cfg.save();
+    quit_signals::wait(signals);
+    // Ctrl+C / systemd stop: hand the devices back before leaving
+    pipeline.shutdown(Duration::from_secs(2));
+    std::process::exit(0);
+}
+
+/// SIGINT/SIGTERM for `--headless`, so a service stop closes the outputs.
+#[cfg(target_os = "linux")]
+mod quit_signals {
+    pub struct Set(libc::sigset_t);
+
+    /// Block the signals in this thread *before* other threads start, so they
+    /// inherit the mask and only `wait` receives them.
+    pub fn block() -> Option<Set> {
+        // SAFETY: plain libc calls on a zeroed, locally owned sigset_t.
+        unsafe {
+            let mut set: libc::sigset_t = std::mem::zeroed();
+            libc::sigemptyset(&mut set);
+            libc::sigaddset(&mut set, libc::SIGINT);
+            libc::sigaddset(&mut set, libc::SIGTERM);
+            (libc::pthread_sigmask(libc::SIG_BLOCK, &set, std::ptr::null_mut()) == 0)
+                .then_some(Set(set))
+        }
+    }
+
+    pub fn wait(set: Option<Set>) {
+        let Some(set) = set else {
+            loop {
+                std::thread::park();
+            }
+        };
+        let mut sig = 0;
+        // SAFETY: `set` was initialised by `block`.
+        unsafe {
+            libc::sigwait(&set.0, &mut sig);
+        }
+    }
+}
+
+/// Elsewhere the default handlers end the process (no device hand-back).
+#[cfg(not(target_os = "linux"))]
+mod quit_signals {
+    pub struct Set;
+    pub fn block() -> Option<Set> {
+        None
+    }
+    pub fn wait(_: Option<Set>) {
+        loop {
+            std::thread::park();
         }
     }
 }
@@ -156,13 +200,13 @@ fn main() {
                 }
             }
         })
-        .run(tauri::generate_context!())
-        .expect("error while running WLED Ambilight");
-}
-
-/// Ungenutzt, aber absichtlich vorhanden: erzwingt die Bindung von `Ordering`
-/// in diesem Modul, damit der Tray-Code beim Umbau nicht still bricht.
-#[allow(dead_code)]
-fn _ordering_marker() -> Ordering {
-    Ordering::Relaxed
+        .build(tauri::generate_context!())
+        .expect("error while building WLED Ambilight")
+        .run(|app, event| {
+            // Beenden über Fenster, Tray oder System: erst die Geräte sauber
+            // freigeben (Razer-Sitzung schließen, Govee/Nanoleaf zurückgeben).
+            if let tauri::RunEvent::Exit = event {
+                app.state::<AppState>().shutdown();
+            }
+        });
 }

@@ -46,7 +46,7 @@ async function test() {
   const found = await probeDevice(draft.value.host);
   if (found) {
     draft.value.name = found.name;
-    draft.value.led_count = found.leds;
+    draft.value.led_count = Math.max(1, found.leds);
     note.value = found.detail;
   }
 }

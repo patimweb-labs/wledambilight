@@ -143,8 +143,11 @@ impl Engine {
     /// Is device `di` due for a packet, given its own fps cap?
     fn due(&mut self, di: usize, dev: &DeviceCfg, target_fps: u32) -> bool {
         if self.last_sent.len() <= di {
-            self.last_sent
-                .resize(di + 1, Instant::now() - Duration::from_secs(1));
+            // "long ago", so a new device gets its first packet at once;
+            // `checked_sub` because an Instant cannot go before boot
+            let now = Instant::now();
+            let long_ago = now.checked_sub(Duration::from_secs(1)).unwrap_or(now);
+            self.last_sent.resize(di + 1, long_ago);
         }
         let fps = if dev.max_fps > 0 {
             dev.max_fps
@@ -207,8 +210,14 @@ impl Engine {
     /// Close every output and wait briefly, so sessions end cleanly (Razer
     /// session closed, Govee/Nanoleaf handed back) when the app quits.
     pub fn shutdown(&mut self) {
+        // ask every output to close first, then wait for all of them together:
+        // five slow devices cost 800 ms, not four seconds
         for (_, out) in self.outputs.values_mut() {
-            out.shutdown(Duration::from_millis(800));
+            out.begin_shutdown();
+        }
+        let deadline = Instant::now() + Duration::from_millis(800);
+        for (_, out) in self.outputs.values_mut() {
+            out.shutdown(deadline.saturating_duration_since(Instant::now()));
         }
         self.outputs.clear();
     }
