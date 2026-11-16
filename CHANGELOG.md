@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.6](https://github.com/patimweb-labs/wledambilight/compare/v0.5.5...v0.5.6) (2026-11-16)
+
+
+### Bug fixes
+
+* Pipeline robuster gegen Netz, Auflösung und Beenden ([#28](https://github.com/patimweb-labs/wledambilight/issues/28)) ([4579600](https://github.com/patimweb-labs/wledambilight/commit/4579600a85e08d5d9d0e4c55f92f7179597a4575))
+
 ## [0.5.5](https://github.com/patimweb-labs/wledambilight/compare/v0.5.4...v0.5.5) (2026-11-03)
 
 
