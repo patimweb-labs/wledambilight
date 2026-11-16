@@ -150,6 +150,20 @@ pub fn frame_height(width: u32, sw: u32, sh: u32) -> u32 {
     }
 }
 
+/// Widest frame any backend delivers. The backends cap it further at the
+/// width of the screen, so this is also what "native" asks for.
+pub const MAX_WIDTH: u32 = 3840;
+
+/// Frame width for the `capture_width` setting: 0 means native (as wide as
+/// the screen, at most [`MAX_WIDTH`]), everything else is kept in 64..=3840.
+pub fn requested_width(setting: u32) -> u32 {
+    if setting == 0 {
+        MAX_WIDTH
+    } else {
+        setting.clamp(64, MAX_WIDTH)
+    }
+}
+
 pub struct ScreenCapture {
     handles: Handles,
     join: Option<std::thread::JoinHandle<()>>,
@@ -167,7 +181,7 @@ impl Drop for ScreenCapture {
 impl ScreenCapture {
     /// Spawn the capture thread for the current platform (or the test picture).
     pub fn start(mut opts: CaptureOptions) -> Self {
-        opts.width = opts.width.clamp(64, 3840);
+        opts.width = requested_width(opts.width);
         let handles = Handles {
             slot: Arc::new(Mutex::new(SharedFrame::black(
                 opts.width,
@@ -217,7 +231,7 @@ impl ScreenCapture {
     /// Ask for another frame width. The backend picks it up on its next frame,
     /// so changing the resolution in the app costs no new portal session.
     pub fn set_width(&self, width: u32) {
-        let width = width.clamp(64, 3840);
+        let width = requested_width(width);
         if width != self.handles.width() {
             self.handles.width.store(width, Ordering::Relaxed);
         }
@@ -251,4 +265,18 @@ pub fn test_picture_forced() -> bool {
 /// Monitors the user can choose from (empty on Linux, where the portal asks).
 pub fn monitors() -> Vec<String> {
     platform::monitors()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn native_resolution_is_not_the_smallest_one() {
+        // the interface offers "native" as capture width 0
+        assert_eq!(requested_width(0), MAX_WIDTH);
+        assert_eq!(requested_width(1), 64);
+        assert_eq!(requested_width(320), 320);
+        assert_eq!(requested_width(100_000), MAX_WIDTH);
+    }
 }
