@@ -277,6 +277,12 @@ impl Config {
     /// Load from an explicit file, falling back to the backup next to it.
     pub fn load_path(path: &std::path::Path) -> Self {
         let backup = path.with_extension("json.bak");
+        let mut cfg = Self::load_unchecked(path, &backup);
+        cfg.sanitize();
+        cfg
+    }
+
+    fn load_unchecked(path: &std::path::Path, backup: &std::path::Path) -> Self {
         match Self::read(path) {
             Ok(Some(cfg)) => cfg,
             Ok(None) => Config::default(),
@@ -288,7 +294,7 @@ impl Config {
                 if std::fs::rename(path, &broken).is_ok() {
                     eprintln!("kept it as {}", broken.display());
                 }
-                match Self::read(&backup) {
+                match Self::read(backup) {
                     Ok(Some(cfg)) => {
                         eprintln!("using the backup {}", backup.display());
                         cfg
@@ -371,6 +377,48 @@ impl Config {
             let _ = std::fs::copy(path, path.with_extension("json.bak"));
         }
         std::fs::rename(&tmp, path)
+    }
+
+    /// Bring every value into the range the pipeline can handle.
+    ///
+    /// The file can be edited by hand and the interface sends whatever its
+    /// fields hold; neither may crash the pipeline, flood the network or
+    /// produce a value (NaN) that cannot be written back as JSON. Called on
+    /// load and on every change from the interface.
+    pub fn sanitize(&mut self) {
+        fn num(v: f32, lo: f32, hi: f32, fallback: f32) -> f32 {
+            if v.is_finite() {
+                v.clamp(lo, hi)
+            } else {
+                fallback
+            }
+        }
+        let d = Settings::default();
+        let s = &mut self.settings;
+        s.target_fps = s.target_fps.clamp(1, 240);
+        // 0 = native resolution of the screen
+        if s.capture_width != 0 {
+            s.capture_width = s.capture_width.clamp(64, 3840);
+        }
+        s.smoothing_ms = num(s.smoothing_ms, 0.0, 10_000.0, d.smoothing_ms);
+        s.spatial = num(s.spatial, 0.0, 1.0, d.spatial);
+        s.slew = num(s.slew, 0.0, 100_000.0, d.slew);
+        s.gamma = num(s.gamma, 0.1, 5.0, d.gamma);
+        s.saturation = num(s.saturation, 0.0, 4.0, d.saturation);
+        s.brightness = num(s.brightness, 0.0, 4.0, d.brightness);
+        for dev in &mut self.devices {
+            dev.led_count = dev.led_count.max(1);
+            dev.brightness = num(dev.brightness, 0.0, 4.0, 1.0);
+            dev.max_fps = dev.max_fps.min(240);
+        }
+        for z in &mut self.zones {
+            z.count = z.count.max(1);
+            z.gain = num(z.gain, 0.0, 10.0, 1.0);
+            z.x = num(z.x, 0.0, 1.0, 0.0);
+            z.y = num(z.y, 0.0, 1.0, 0.0);
+            z.w = num(z.w, 0.0, 1.0, 1.0).min(1.0 - z.x);
+            z.h = num(z.h, 0.0, 1.0, 1.0).min(1.0 - z.y);
+        }
     }
 
     pub fn device(&self, id: &str) -> Option<&DeviceCfg> {
@@ -811,6 +859,51 @@ mod tests {
             "the broken file is kept for a post mortem"
         );
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn sanitize_brings_hand_edited_values_into_range() {
+        let json = r#"{
+            "devices": [{"id":"a","name":"A","host":"a","led_count":0,"enabled":true,
+                         "protocol":"Ddp","brightness":-3.0,"reverse":false,"bgr":false,
+                         "max_fps":100000}],
+            "zones": [{"name":"Z","device":"a","x":-1,"y":0.95,"w":5,"h":0.5,"count":0,
+                       "vertical":false,"gain":1,"enabled":true,"offset":null,
+                       "color":[1,2,3]}],
+            "settings": {"target_fps":0,"capture_width":100000,"gamma":0,"spatial":7}
+        }"#;
+        let dir = std::env::temp_dir().join(format!("wled-ambilight-clamp-{}", std::process::id()));
+        let path = dir.join("config.json");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(&path, json).unwrap();
+        let cfg = Config::load_path(&path);
+        let _ = std::fs::remove_dir_all(dir);
+        assert_eq!(cfg.devices[0].led_count, 1);
+        assert_eq!(cfg.devices[0].brightness, 0.0);
+        assert_eq!(cfg.devices[0].max_fps, 240);
+        let z = &cfg.zones[0];
+        assert_eq!((z.x, z.count), (0.0, 1));
+        assert!(
+            (z.y + z.h - 1.0).abs() < 1e-6,
+            "the zone ends at the bottom edge"
+        );
+        assert_eq!(z.w, 1.0);
+        assert_eq!(cfg.settings.target_fps, 1);
+        assert_eq!(cfg.settings.capture_width, 3840);
+        assert_eq!(cfg.settings.gamma, 0.1);
+        assert_eq!(cfg.settings.spatial, 1.0);
+
+        // "native" stays native, NaN falls back to the default
+        let mut native = Config::default();
+        native.settings.capture_width = 0;
+        native.settings.smoothing_ms = f32::NAN;
+        native.sanitize();
+        assert_eq!(native.settings.capture_width, 0);
+        assert_eq!(
+            native.settings.smoothing_ms,
+            Settings::default().smoothing_ms
+        );
+        assert!(serde_json::to_string(&native).is_ok());
     }
 
     #[test]
