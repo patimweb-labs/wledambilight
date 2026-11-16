@@ -189,37 +189,58 @@ struct DdpSender {
 /// UDP target for a device address. `host` may carry its own port
 /// (`192.168.0.5:4048`), which the tests and NAT setups use.
 fn udp_target(host: &str, default_port: u16) -> Option<SocketAddr> {
-    let host = host.trim();
-    if let Ok(addr) = host.parse::<SocketAddr>() {
+    if let Some(addr) = literal_target(host, default_port) {
         return Some(addr);
     }
-    if let Ok(ip) = host.parse::<IpAddr>() {
-        return Some(SocketAddr::new(ip, default_port));
-    }
-    let mut addr = host.to_socket_addrs().ok()?.next()?;
+    let host = host.trim();
+    // `to_socket_addrs` needs a port; a bare name gets the default one
+    let mut addr = match host.to_socket_addrs() {
+        Ok(mut a) => a.next()?,
+        Err(_) => (host, default_port).to_socket_addrs().ok()?.next()?,
+    };
     if addr.port() == 0 {
         addr.set_port(default_port);
     }
     Some(addr)
 }
 
-impl DdpSender {
-    pub fn new(host: &str) -> Option<Self> {
-        Self::connect_to(udp_target(host, 4048)?)
+/// An address that needs no name lookup (IP, optionally with port).
+fn literal_target(host: &str, default_port: u16) -> Option<SocketAddr> {
+    let host = host.trim();
+    if let Ok(addr) = host.parse::<SocketAddr>() {
+        return Some(addr);
     }
+    host.parse::<IpAddr>()
+        .ok()
+        .map(|ip| SocketAddr::new(ip, default_port))
+}
 
+fn udp_socket(addr: SocketAddr) -> std::io::Result<UdpSocket> {
+    let bind: SocketAddr = if addr.is_ipv4() {
+        "0.0.0.0:0".parse().unwrap()
+    } else {
+        "[::]:0".parse().unwrap()
+    };
+    let sock = UdpSocket::bind(bind)?;
+    sock.connect(addr)?;
+    sock.set_nonblocking(true)?;
+    Ok(sock)
+}
+
+impl DdpSender {
     /// Sender for an explicit address (the tests use a local port).
     fn connect_to(addr: SocketAddr) -> Option<Self> {
-        let sock = UdpSocket::bind("0.0.0.0:0").ok()?;
-        sock.connect(addr).ok()?;
-        sock.set_nonblocking(true).ok()?;
-        Some(Self { sock, seq: 0 })
+        Some(Self {
+            sock: udp_socket(addr).ok()?,
+            seq: 0,
+        })
     }
 
-    pub fn send(&mut self, colors: &[[u8; 3]]) {
+    pub fn send(&mut self, colors: &[[u8; 3]]) -> std::io::Result<()> {
         // 480 LEDs per packet keeps the datagram below the ethernet MTU
         const CHUNK: usize = 480;
         let mut offset = 0usize;
+        let mut result = Ok(());
         while offset < colors.len() {
             let n = (colors.len() - offset).min(CHUNK);
             let last = offset + n >= colors.len();
@@ -236,10 +257,13 @@ impl DdpSender {
             for c in &colors[offset..offset + n] {
                 pkt.extend_from_slice(c);
             }
-            let _ = self.sock.send(&pkt);
+            if let Err(e) = self.sock.send(&pkt) {
+                result = Err(e);
+            }
             offset += n;
         }
         self.seq = self.seq.wrapping_add(1);
+        result
     }
 }
 
@@ -248,63 +272,189 @@ pub struct DrgbSender {
 }
 
 impl DrgbSender {
-    pub fn new(host: &str) -> Option<Self> {
-        let addr = udp_target(host, 21324)?;
-        let sock = UdpSocket::bind("0.0.0.0:0").ok()?;
-        sock.connect(addr).ok()?;
-        sock.set_nonblocking(true).ok()?;
-        Some(Self { sock })
+    fn connect_to(addr: SocketAddr) -> Option<Self> {
+        Some(Self {
+            sock: udp_socket(addr).ok()?,
+        })
     }
 
-    pub fn send(&mut self, colors: &[[u8; 3]]) {
+    pub fn send(&mut self, colors: &[[u8; 3]]) -> std::io::Result<()> {
         let mut pkt = Vec::with_capacity(6 + colors.len() * 3);
         pkt.extend_from_slice(b"DRGB");
         pkt.push(2); // seconds until WLED falls back to its own effect
         for c in colors.iter().take(DRGB_MAX) {
             pkt.extend_from_slice(c);
         }
-        let _ = self.sock.send(&pkt);
+        self.sock.send(&pkt).map(|_| ())
     }
 }
 
 /// DRGB fits 490 LEDs into one datagram.
 pub const DRGB_MAX: usize = 490;
 
+enum Socket {
+    Ddp(DdpSender),
+    Drgb(DrgbSender),
+}
+
+/// How often an unresolvable or unreachable address is tried again.
+const RETRY: Duration = Duration::from_secs(3);
+/// How often a host *name* is looked up again (DHCP may move the device).
+const REFRESH: Duration = Duration::from_secs(60);
+
+/// Realtime sender for one WLED device.
+///
+/// `send` runs in the pipeline thread on every tick, so it never blocks:
+/// IP addresses are used directly, host names are looked up in a helper
+/// thread (a failing lookup can take seconds), and a broken socket (network
+/// changed, interface down) is rebuilt after a short pause.
 pub struct Sender {
     host: String,
     protocol: Protocol,
-    ddp: Option<DdpSender>,
-    drgb: Option<DrgbSender>,
+    sock: Option<(SocketAddr, Socket)>,
+    lookup: Option<std::sync::mpsc::Receiver<Option<SocketAddr>>>,
+    next_try: Instant,
+    looked_up: Instant,
+    error: Option<String>,
 }
 
 impl Sender {
     pub fn new(host: &str, protocol: Protocol) -> Self {
         Self {
-            host: host.to_string(),
+            host: host.trim().to_string(),
             protocol,
-            ddp: None,
-            drgb: None,
+            sock: None,
+            lookup: None,
+            next_try: Instant::now(),
+            looked_up: Instant::now(),
+            error: None,
+        }
+    }
+
+    fn port(&self) -> u16 {
+        match self.protocol {
+            Protocol::Ddp => 4048,
+            Protocol::Drgb => 21324,
+        }
+    }
+
+    fn open(&mut self, addr: SocketAddr) {
+        let sock = match self.protocol {
+            Protocol::Ddp => DdpSender::connect_to(addr).map(Socket::Ddp),
+            Protocol::Drgb => DrgbSender::connect_to(addr).map(Socket::Drgb),
+        };
+        match sock {
+            Some(s) => {
+                self.sock = Some((addr, s));
+                self.error = None;
+            }
+            None => {
+                self.sock = None;
+                self.error = Some(format!("{addr}: no route"));
+                self.next_try = Instant::now() + RETRY;
+            }
+        }
+    }
+
+    fn start_lookup(&mut self) {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let host = self.host.clone();
+        let port = self.port();
+        let spawned = std::thread::Builder::new()
+            .name("wled-lookup".into())
+            .spawn(move || {
+                let _ = tx.send(udp_target(&host, port));
+            });
+        if spawned.is_ok() {
+            self.lookup = Some(rx);
+        } else {
+            self.next_try = Instant::now() + RETRY;
+        }
+    }
+
+    /// Make sure there is a socket, without ever waiting for the network.
+    fn prepare(&mut self) {
+        let now = Instant::now();
+        if let Some(rx) = &self.lookup {
+            match rx.try_recv() {
+                Ok(found) => {
+                    self.lookup = None;
+                    self.looked_up = now;
+                    match found {
+                        // same address as before: keep the socket (and the DDP sequence)
+                        Some(addr) if self.sock.as_ref().map(|s| s.0) == Some(addr) => {}
+                        Some(addr) => self.open(addr),
+                        // a failed refresh keeps the last working address
+                        None if self.sock.is_some() => {}
+                        None => {
+                            self.error = Some(format!(
+                                "{}: {}",
+                                self.host,
+                                crate::i18n::tr(
+                                    "Adresse nicht auflösbar",
+                                    "cannot resolve address"
+                                )
+                            ));
+                            self.next_try = now + RETRY;
+                        }
+                    }
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => {}
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    self.lookup = None;
+                    self.next_try = now + RETRY;
+                }
+            }
+            return;
+        }
+        if self.sock.is_none() {
+            if now < self.next_try {
+                return;
+            }
+            match literal_target(&self.host, self.port()) {
+                Some(addr) => self.open(addr),
+                None => self.start_lookup(),
+            }
+        } else if literal_target(&self.host, self.port()).is_none()
+            && self.looked_up.elapsed() >= REFRESH
+        {
+            self.start_lookup();
         }
     }
 
     pub fn send(&mut self, colors: &[[u8; 3]]) {
-        match self.protocol {
-            Protocol::Ddp => {
-                if self.ddp.is_none() {
-                    self.ddp = DdpSender::new(&self.host);
-                }
-                if let Some(s) = self.ddp.as_mut() {
-                    s.send(colors);
+        self.prepare();
+        let Some((_, sock)) = self.sock.as_mut() else {
+            return;
+        };
+        let result = match sock {
+            Socket::Ddp(s) => s.send(colors),
+            Socket::Drgb(s) => s.send(colors),
+        };
+        if let Err(e) = result {
+            use std::io::ErrorKind;
+            match e.kind() {
+                // full send buffer: drop this frame, the next one follows
+                ErrorKind::WouldBlock => {}
+                // ICMP "port unreachable" from the last packet: WLED is
+                // rebooting or realtime is off; keep sending
+                ErrorKind::ConnectionRefused => {}
+                // network changed or went away: build a new socket shortly
+                _ => {
+                    self.error = Some(format!("{}: {e}", self.host));
+                    self.sock = None;
+                    self.next_try = Instant::now() + RETRY;
                 }
             }
-            Protocol::Drgb => {
-                if self.drgb.is_none() {
-                    self.drgb = DrgbSender::new(&self.host);
-                }
-                if let Some(s) = self.drgb.as_mut() {
-                    s.send(colors);
-                }
-            }
+        }
+    }
+
+    pub fn status(&self) -> crate::output::Status {
+        use crate::output::Status;
+        match (&self.sock, &self.error) {
+            (Some(_), _) => Status::Ok,
+            (None, Some(e)) => Status::Error(e.clone()),
+            (None, None) => Status::Connecting,
         }
     }
 }
@@ -319,7 +469,7 @@ fn ddp_packets(colors: &[[u8; 3]]) -> Vec<Vec<u8>> {
     // connect straight to the test port: macOS refuses to re-connect a
     // connected UDP socket (EISCONN), Linux allows it
     let mut tx = DdpSender::connect_to(SocketAddr::from(([127, 0, 0, 1], port))).unwrap();
-    tx.send(colors);
+    tx.send(colors).unwrap();
     let mut out = Vec::new();
     let mut buf = [0u8; 2048];
     while let Ok(n) = sock.recv(&mut buf) {
@@ -331,6 +481,43 @@ fn ddp_packets(colors: &[[u8; 3]]) -> Vec<Vec<u8>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_unresolvable_name_never_blocks_the_pipeline() {
+        // `.invalid` is reserved and never resolves (RFC 6761)
+        let mut tx = Sender::new("wled-strip.invalid", Protocol::Ddp);
+        let t0 = Instant::now();
+        for _ in 0..200 {
+            tx.send(&[[1, 2, 3]; 10]);
+        }
+        assert!(
+            t0.elapsed() < Duration::from_millis(200),
+            "send waited for DNS: {:?}",
+            t0.elapsed()
+        );
+        // the lookup runs in the background and ends in an error
+        let deadline = Instant::now() + Duration::from_secs(15);
+        while !matches!(tx.status(), crate::output::Status::Error(_)) && Instant::now() < deadline {
+            tx.send(&[[0; 3]; 1]);
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert!(matches!(tx.status(), crate::output::Status::Error(_)));
+    }
+
+    #[test]
+    fn a_host_with_port_is_sent_to_directly() {
+        let rx = UdpSocket::bind("127.0.0.1:0").unwrap();
+        rx.set_read_timeout(Some(Duration::from_millis(500)))
+            .unwrap();
+        let host = format!("127.0.0.1:{}", rx.local_addr().unwrap().port());
+        let mut tx = Sender::new(&host, Protocol::Drgb);
+        tx.send(&[[7, 8, 9]]);
+        let mut buf = [0u8; 64];
+        let n = rx.recv(&mut buf).unwrap();
+        assert_eq!(&buf[..n], b"DRGB\x02\x07\x08\x09");
+        assert_eq!(tx.status(), crate::output::Status::Ok);
+        assert_eq!(udp_target("localhost", 4048).map(|a| a.port()), Some(4048));
+    }
 
     #[test]
     fn ddp_splits_and_pushes_only_the_last_packet() {
