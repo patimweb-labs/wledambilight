@@ -5,7 +5,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { Config, FoundDevice, Snapshot, Telemetry, ThemeName } from "./api";
 import { translator } from "./i18n";
-import { zoneRanges as computeRanges } from "./lib/zones";
+import { ledsOf, zoneRanges as computeRanges } from "./lib/zones";
 
 export const state = reactive({
   config: null as Config | null,
@@ -144,7 +144,8 @@ export function addFound(found: FoundDevice) {
     id: found.id,
     name: found.name,
     host: found.host,
-    led_count: found.leds,
+    // WLED meldet ohne Konfiguration 0 LEDs; ein Gerät braucht mindestens eine
+    led_count: Math.max(1, found.leds),
     enabled: true,
     protocol: "Ddp",
     kind: (found.kind === "wled"
@@ -238,11 +239,12 @@ export async function listOpenRgb(host: string, port: number): Promise<FoundDevi
 export function zoneLeds(index: number): [number, number, number][] {
   const zone = state.config?.zones[index];
   if (!zone) return [];
-  const deviceIndex = (state.config?.devices ?? []).findIndex((d) => d.id === zone.device);
+  const devices = state.config?.devices ?? [];
+  const deviceIndex = devices.findIndex((d) => d.id === zone.device);
   if (deviceIndex < 0) return [];
   const strip = state.telemetry?.device_leds?.[deviceIndex] ?? [];
   const { start, count } = zoneRanges()[index] ?? { start: 0, count: zone.count };
-  return strip.slice(start, start + count);
+  return ledsOf(strip, devices[deviceIndex], start, count);
 }
 
 /** LED-Bereich jeder Zone (getestete Logik in `lib/zones.ts`). */

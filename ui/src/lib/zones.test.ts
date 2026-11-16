@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { zoneRanges } from "./zones";
+import { ledsOf, zoneRanges } from "./zones";
 import type { Zone } from "../api";
 
 function zone(device: string, count: number, offset: number | null = null, enabled = true): Zone {
@@ -24,8 +24,11 @@ describe("zoneRanges", () => {
   it("nimmt einen ausdrücklichen Startindex", () => {
     const ranges = zoneRanges([zone("d1", 10), zone("d1", 10, 40)]);
     expect(ranges[1].start).toBe(40);
-    // Der ausdrückliche Index verschiebt den Zähler nicht.
-    expect(zoneRanges([zone("d1", 10, 40), zone("d1", 10)])[1].start).toBe(0);
+    // Wie im Kern (`Config::zone_starts`): die nächste Zone rückt hinter den
+    // festen Block, nicht an den Anfang.
+    expect(zoneRanges([zone("d1", 10, 40), zone("d1", 10)])[1].start).toBe(50);
+    expect(zoneRanges([zone("d1", 10), zone("d1", 20, 50), zone("d1", 5)]).map((r) => r.start))
+      .toEqual([0, 50, 70]);
   });
 
   it("lässt deaktivierte Zonen keinen Platz belegen", () => {
@@ -36,5 +39,26 @@ describe("zoneRanges", () => {
 
   it("beschriftet eine einzelne LED ohne Bereich", () => {
     expect(zoneRanges([zone("d1", 1)])[0].label).toBe("LED 0");
+  });
+});
+
+describe("ledsOf", () => {
+  const wire: [number, number, number][] = [[1, 0, 0], [2, 0, 0], [3, 0, 0], [4, 0, 0]];
+
+  it("schneidet den Bereich der Zone aus", () => {
+    expect(ledsOf(wire, { reverse: false, bgr: false }, 1, 2)).toEqual([[2, 0, 0], [3, 0, 0]]);
+  });
+
+  it("rechnet einen umgedrehten Streifen zurück", () => {
+    expect(ledsOf(wire, { reverse: true, bgr: false }, 0, 2)).toEqual([[4, 0, 0], [3, 0, 0]]);
+  });
+
+  it("tauscht Rot und Blau bei BGR zurück", () => {
+    expect(ledsOf([[0, 0, 9]], { reverse: false, bgr: true }, 0, 1)).toEqual([[9, 0, 0]]);
+  });
+
+  it("bleibt innerhalb des Puffers", () => {
+    expect(ledsOf(wire, { reverse: false, bgr: false }, 3, 10)).toEqual([[4, 0, 0]]);
+    expect(ledsOf(wire, { reverse: true, bgr: false }, 8, 2)).toEqual([]);
   });
 });
