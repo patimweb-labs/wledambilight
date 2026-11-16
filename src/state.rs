@@ -37,6 +37,15 @@ impl AppState {
         self.pipeline.shared.clone()
     }
 
+    /// Stop the pipeline and close every output before the process ends.
+    ///
+    /// `AppHandle::exit` ends the process without dropping managed state, so
+    /// without this call Razer sessions stay open and Govee/Nanoleaf stay in
+    /// realtime mode after quitting.
+    pub fn shutdown(&self) {
+        self.pipeline.shutdown(std::time::Duration::from_secs(2));
+    }
+
     /// Konfiguration setzen und auf die Platte schreiben.
     ///
     /// Der Portal-Token gehört der Pipeline; `set_config` behält ihn, deshalb wird

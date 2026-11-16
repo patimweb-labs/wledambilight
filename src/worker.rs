@@ -64,18 +64,26 @@ pub struct Shared {
 impl Shared {
     pub fn set_config(&self, cfg: &Config) {
         let mut c = self.cfg.lock().unwrap();
-        // the portal token is owned by the pipeline; never let the UI wipe it
+        // The portal token is owned by the pipeline. The UI holds a copy from
+        // its last snapshot, and portal tokens are single use: taking the UI's
+        // (possibly stale) token would make the next start ask again. Only
+        // `clear_restore_token` may drop it.
         let token = c.settings.restore_token.take();
         *c = cfg.clone();
-        if c.settings.restore_token.is_none() {
-            c.settings.restore_token = token;
-        }
+        c.settings.restore_token = token;
+        c.sanitize();
         self.cfg_version.fetch_add(1, Ordering::Release);
     }
-    /// Forget the portal token, so the next capture start asks again.
+    /// Forget the portal token, so the next capture start asks again. Written
+    /// to disk at once, otherwise the old token would come back on restart.
     pub fn clear_restore_token(&self) {
-        self.cfg.lock().unwrap().settings.restore_token = None;
-        self.cfg_version.fetch_add(1, Ordering::Release);
+        let snapshot = {
+            let mut c = self.cfg.lock().unwrap();
+            c.settings.restore_token = None;
+            self.cfg_version.fetch_add(1, Ordering::Release);
+            c.clone()
+        };
+        snapshot.save();
     }
     pub fn restore_token(&self) -> Option<String> {
         self.cfg.lock().unwrap().settings.restore_token.clone()
@@ -90,11 +98,15 @@ impl Shared {
         self.stats.lock().unwrap().clone()
     }
     /// The capture may hand out a new portal token; store it in the config.
-    fn store_token(&self, token: String) {
+    /// Returns true when the token changed (and the config should be saved).
+    fn store_token(&self, token: String) -> bool {
         let mut c = self.cfg.lock().unwrap();
         if c.settings.restore_token.as_ref() != Some(&token) {
             c.settings.restore_token = Some(token);
             self.cfg_version.fetch_add(1, Ordering::Release);
+            true
+        } else {
+            false
         }
     }
 }
@@ -102,15 +114,13 @@ impl Shared {
 pub struct Pipeline {
     pub shared: Arc<Shared>,
     stop: Arc<AtomicBool>,
-    join: Option<std::thread::JoinHandle<()>>,
+    /// set by the pipeline thread when it has closed every output
+    finished: Arc<AtomicBool>,
 }
 
 impl Drop for Pipeline {
     fn drop(&mut self) {
-        self.stop.store(true, Ordering::Relaxed);
-        if let Some(j) = self.join.take() {
-            let _ = j.join();
-        }
+        self.shutdown(Duration::from_secs(2));
     }
 }
 
@@ -126,13 +136,38 @@ impl Pipeline {
             restart: AtomicU64::new(0),
         });
         let stop = Arc::new(AtomicBool::new(false));
+        let finished = Arc::new(AtomicBool::new(false));
         let sh = shared.clone();
         let sp = stop.clone();
-        let join = std::thread::Builder::new()
+        let done = finished.clone();
+        let spawned = std::thread::Builder::new()
             .name("pipeline".into())
-            .spawn(move || run(sh, sp))
-            .ok();
-        Self { shared, stop, join }
+            .spawn(move || {
+                run(sh, sp);
+                done.store(true, Ordering::Release);
+            });
+        if let Err(e) = spawned {
+            eprintln!("could not start the pipeline thread: {e}");
+            finished.store(true, Ordering::Release);
+            shared.stats.lock().unwrap().status =
+                CaptureStatus::Error(format!("pipeline thread: {e}"));
+        }
+        Self {
+            shared,
+            stop,
+            finished,
+        }
+    }
+
+    /// Stop the pipeline and wait up to `wait` until every output is closed
+    /// (Razer session ended, Govee/Nanoleaf handed back). Never blocks longer:
+    /// a hanging capture backend must not keep the app from quitting.
+    pub fn shutdown(&self, wait: Duration) {
+        self.stop.store(true, Ordering::Relaxed);
+        let deadline = Instant::now() + wait;
+        while !self.finished.load(Ordering::Acquire) && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(10));
+        }
     }
 }
 
@@ -237,7 +272,12 @@ fn run(shared: Arc<Shared>, stop: Arc<AtomicBool>) {
         if !test_mode {
             if let Some(c) = screen.as_ref() {
                 if let Some(t) = c.restore_token() {
-                    shared.store_token(t);
+                    // Portal tokens are single use: every start hands out a
+                    // new one. Write it at once, or the next start of the app
+                    // asks for permission again.
+                    if shared.store_token(t) {
+                        shared.config().save();
+                    }
                 }
             }
         }
@@ -295,6 +335,14 @@ fn run(shared: Arc<Shared>, stop: Arc<AtomicBool>) {
         }
     }
     engine.shutdown();
+    // never join a capture here: a portal or GStreamer teardown can hang, and
+    // the app must still be able to quit
+    if let Some(c) = screen.take() {
+        c.stop();
+    }
+    if let Some(c) = test.take() {
+        c.stop();
+    }
 }
 
 #[cfg(test)]
