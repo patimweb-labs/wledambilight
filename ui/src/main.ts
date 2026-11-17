@@ -5,7 +5,10 @@ import "@weppelmann/components/style.css";
 import "./base.css";
 import App from "./App.vue";
 import { init } from "./store";
+import { markScrolling } from "./lib/scrolling";
 
 // Erst den Zustand holen, dann zeichnen: die Oberfläche soll beim ersten Bild
 // schon die Wahrheit zeigen und nicht kurz einen leeren Rahmen.
+markScrolling(document);
+
 init().finally(() => createApp(App).mount("#app"));
