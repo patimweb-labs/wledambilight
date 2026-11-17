@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/patimweb-labs/wledambilight/compare/v0.5.6...v0.6.0) (2026-11-17)
+
+
+### Features
+
+* **ui:** Scrollleisten erscheinen nur beim Scrollen ([#30](https://github.com/patimweb-labs/wledambilight/issues/30)) ([284f315](https://github.com/patimweb-labs/wledambilight/commit/284f3156b505c016c5c88da43cb4d09b4253ff55))
+
 ## [0.5.6](https://github.com/patimweb-labs/wledambilight/compare/v0.5.5...v0.5.6) (2026-11-16)
 
 
