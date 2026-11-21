@@ -1,0 +1,40 @@
+{
+  "color": {
+    "$type": "color",
+    "bg": {
+      "canvas": { "$value": "{color.grau.950}" },
+      "panel": { "$value": "{color.grau.900}" },
+      "raised": { "$value": "{color.grau.850}" },
+      "input": { "$value": "{color.grau.1000}" },
+      "hover": { "$value": "{color.grau.800}" },
+      "selected": { "$value": "{color.grau.700}" }
+    },
+    "border": {
+      "subtle": { "$value": "{color.grau.700}" },
+      "strong": { "$value": "{color.grau.500}" }
+    },
+    "text": {
+      "default": { "$value": "{color.weiss}" },
+      "muted": { "$value": "{color.grau.300}" },
+      "faint": { "$value": "{color.grau.400}" },
+      "on-accent": { "$value": "{color.grau.950}" }
+    },
+    "accent": {
+      "default": { "$value": "{color.weiss}" },
+      "hover": { "$value": "{color.grau.100}" },
+      "deep": { "$value": "{color.grau.600}" }
+    },
+    "signal": {
+      "default": { "$value": "{color.grau.200}" },
+      "deep": { "$value": "{color.grau.600}" }
+    },
+    "status": {
+      "ok": { "$value": "{color.gruen.400}" },
+      "warn": { "$value": "{color.gelb.300}" },
+      "error": { "$value": "{color.rot.400}" }
+    },
+    "focus": {
+      "ring": { "$value": "{color.weiss}" }
+    }
+  }
+}

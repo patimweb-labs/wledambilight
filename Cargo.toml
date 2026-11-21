@@ -13,53 +13,28 @@ keywords = ["wled", "ambilight", "openrgb", "govee", "nanoleaf"]
 categories = ["multimedia", "gui"]
 publish = false
 
-# Der Kern (Aufnahme, Sampling, Ausgabe, Konfiguration) ist eine Bibliothek, damit
-# Tests und die Oberfläche (Tauri) dieselbe Logik benutzen. Die Oberfläche selbst
-# ist eine Web-Anwendung; Rust liefert nur Befehle und Ereignisse.
-[features]
-# Setzt Tauri in den Auslieferungsmodus: die gebaute Oberfläche wird eingebettet,
-# statt den Entwicklungsserver zu erwarten.
-custom-protocol = ["tauri/custom-protocol"]
-
-[lib]
-name = "wled_ambilight"
-path = "src/lib.rs"
-
+# Drei Pakete, ein Pfeil: `crates/core` (Aufnahme, Sampling, Ausgabe,
+# Konfiguration; Bibliothek `wled_ambilight`) ← `crates/fenster` (egui) ← dieses
+# Paket (das Programm). Die Oberfläche ist reines Rust – kein Node, kein WebView.
 [[bin]]
 name = "wled-ambilight"
 path = "src/main.rs"
 
 [dependencies]
-anyhow = "1"
-serde = { version = "1.0.229", features = ["derive"] }
-serde_json = "1.0.154"
-mdns-sd = "0.21"
-dirs = "7"
-sys-locale = "0.3"
-# HTTP für Razer Chroma (localhost) und Nanoleaf (LAN); kein TLS nötig
-ureq = { version = "3", default-features = false, features = ["json"] }
-# Vorschau: das aufgenommene Bild als JPEG an die Oberfläche
-image = { version = "0.25", default-features = false, features = ["jpeg"] }
-tauri = { version = "2", features = ["tray-icon", "image-png"] }
+wled_ambilight = { package = "wled-ambilight-core", path = "crates/core" }
+wled-ambilight-fenster = { path = "crates/fenster" }
 
-# Linux: xdg-desktop-portal + PipeWire (über GStreamer)
+# `--headless`: SIGINT/SIGTERM abwarten, damit ein Dienst-Stopp die Geräte
+# zurückgibt.
 [target.'cfg(target_os = "linux")'.dependencies]
-ashpd = { version = "0.13", features = ["screencast"] }
 libc = "0.2"
-tokio = { version = "1", features = ["rt", "macros", "time"] }
 
-# Windows: Windows Graphics Capture
-[target.'cfg(target_os = "windows")'.dependencies]
-windows-capture = "2"
-raw-window-handle = "0.6"
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
+# Windows: Programmsymbol und Versionsangaben in die .exe
+[target.'cfg(windows)'.build-dependencies]
+winresource = "0.1"
 
-# macOS: ScreenCaptureKit
-[target.'cfg(target_os = "macos")'.dependencies]
-screencapturekit = "11"
-
-[build-dependencies]
-tauri-build = { version = "2", features = [] }
+[workspace]
+members = ["crates/core", "crates/fenster"]
 
 [profile.release]
 lto = "thin"
@@ -78,7 +53,7 @@ extended-description = """\
 Captures the screen through the XDG desktop portal (PipeWire), samples freely \
 placed zones and streams the colours to WLED, OpenRGB, Govee and Nanoleaf \
 devices in the local network."""
-depends = "$auto, gstreamer1.0-tools, gstreamer1.0-pipewire, gstreamer1.0-plugins-base, xdg-desktop-portal, webkit2gtk4.1"
+depends = "$auto, gstreamer1.0-tools, gstreamer1.0-pipewire, gstreamer1.0-plugins-base, xdg-desktop-portal"
 section = "video"
 priority = "optional"
 assets = [
@@ -110,9 +85,6 @@ assets = [
 ]
 
 [package.metadata.generate-rpm.requires]
-"webkit2gtk4.1" = "*"
-"libayatana-appindicator-gtk3" = "*"
-"gtk3" = "*"
 "gstreamer1-plugins-base" = "*"
 "pipewire-gstreamer" = "*"
 "xdg-desktop-portal" = "*"

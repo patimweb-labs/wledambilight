@@ -1,0 +1,288 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Patrick Weppelmann
+
+//! Screen capture, one backend per operating system.
+//!
+//! | OS      | Backend                                              |
+//! |---------|------------------------------------------------------|
+//! | Linux   | xdg-desktop-portal ScreenCast + PipeWire (GStreamer) |
+//! | Windows | Windows Graphics Capture                             |
+//! | macOS   | ScreenCaptureKit                                     |
+//!
+//! Every backend delivers small RGB frames (`capture_width` wide, height follows
+//! the screen aspect) into a shared slot. The rest of the program never sees
+//! the native resolution, so zones work the same everywhere.
+
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::{Arc, Mutex};
+
+#[cfg(target_os = "linux")]
+mod linux;
+#[cfg(target_os = "linux")]
+use linux as platform;
+
+#[cfg(target_os = "windows")]
+mod windows;
+#[cfg(target_os = "windows")]
+use windows as platform;
+
+#[cfg(target_os = "macos")]
+mod macos;
+#[cfg(target_os = "macos")]
+use macos as platform;
+
+mod demo;
+pub mod scale;
+
+/// Das eigene Fenster aus der Aufnahme nehmen, wo das System es kann
+/// (Windows 10 2004+). Anderswo ohne Wirkung: macOS lässt die App selbst aus
+/// dem Inhaltsfilter, Linux friert stattdessen die Vorschau ein.
+#[allow(unused_variables)]
+pub fn exclude_own_window(handle: raw_window_handle::RawWindowHandle) {
+    #[cfg(target_os = "windows")]
+    windows::exclude_window_from_capture(handle);
+}
+
+/// True when the backend leaves our own window out of the picture. Then the
+/// preview can stay live without feeding the app's own pixels back into the
+/// LEDs. On Linux the portal cannot do that, so the UI freezes its preview
+/// while unfocused instead.
+pub const EXCLUDES_OWN_WINDOW: bool = cfg!(any(target_os = "windows", target_os = "macos"));
+
+/// Whether the user can pick a monitor in the app (on Linux the portal asks).
+pub const HAS_MONITOR_CHOICE: bool = cfg!(any(target_os = "windows", target_os = "macos"));
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum CaptureStatus {
+    Idle,
+    Starting,
+    Running { w: u32, h: u32 },
+    Error(String),
+}
+
+/// One captured frame, tightly packed RGB. The pixel data is reference counted
+/// so handing a frame to the pipeline and the preview is free.
+#[derive(Clone)]
+pub struct SharedFrame {
+    pub w: u32,
+    pub h: u32,
+    pub data: Arc<Vec<u8>>,
+    pub seq: u64,
+}
+
+impl SharedFrame {
+    pub fn black(w: u32, h: u32) -> Self {
+        Self {
+            w,
+            h,
+            data: Arc::new(vec![0; (w * h * 3) as usize]),
+            seq: 0,
+        }
+    }
+}
+
+pub type FrameSlot = Arc<Mutex<SharedFrame>>;
+
+#[derive(Debug, Clone)]
+pub struct CaptureOptions {
+    /// width of the delivered frames
+    pub width: u32,
+    /// upper bound for the frame rate the backend should deliver
+    #[cfg_attr(target_os = "linux", allow(dead_code))]
+    pub fps: u32,
+    /// Windows/macOS: monitor index
+    #[cfg_attr(target_os = "linux", allow(dead_code))]
+    pub monitor: usize,
+    /// Linux: portal restore token
+    pub restore_token: Option<String>,
+    /// show the test picture instead of the screen (no permission needed)
+    pub test_image: bool,
+}
+
+/// Everything a backend writes to. Cheap to clone, shared with the owner.
+#[derive(Clone)]
+pub struct Handles {
+    pub slot: FrameSlot,
+    pub screen: Arc<Mutex<(u32, u32)>>,
+    pub status: Arc<Mutex<CaptureStatus>>,
+    pub restore_token: Arc<Mutex<Option<String>>>,
+    pub stop: Arc<AtomicBool>,
+    /// width the backend should deliver; can change while it runs, so a new
+    /// resolution does not cost a new portal session
+    width: Arc<AtomicU32>,
+}
+
+impl Handles {
+    /// Width the backend should deliver right now.
+    pub fn width(&self) -> u32 {
+        self.width.load(Ordering::Relaxed)
+    }
+
+    pub fn set_status(&self, s: CaptureStatus) {
+        *self.status.lock().unwrap() = s;
+    }
+
+    pub fn fail(&self, msg: impl Into<String>) {
+        self.set_status(CaptureStatus::Error(msg.into()));
+    }
+
+    pub fn stopped(&self) -> bool {
+        self.stop.load(Ordering::Relaxed)
+    }
+
+    pub fn set_screen(&self, w: u32, h: u32) {
+        if w > 0 && h > 0 {
+            *self.screen.lock().unwrap() = (w, h);
+        }
+    }
+
+    /// Hand a finished RGB frame to the pipeline.
+    pub fn publish(&self, w: u32, h: u32, rgb: Vec<u8>) {
+        debug_assert_eq!(rgb.len(), (w * h * 3) as usize);
+        let mut g = self.slot.lock().unwrap();
+        g.w = w;
+        g.h = h;
+        g.data = Arc::new(rgb);
+        g.seq = g.seq.wrapping_add(1);
+    }
+}
+
+/// Height of the capture buffer for a screen of `sw × sh` at `width`.
+pub fn frame_height(width: u32, sw: u32, sh: u32) -> u32 {
+    if sw > 0 && sh > 0 {
+        ((width as f32 * sh as f32 / sw as f32).round() as u32).clamp(32, 2160) & !1
+    } else {
+        width * 9 / 16
+    }
+}
+
+/// Widest frame any backend delivers. The backends cap it further at the
+/// width of the screen, so this is also what "native" asks for.
+pub const MAX_WIDTH: u32 = 3840;
+
+/// Frame width for the `capture_width` setting: 0 means native (as wide as
+/// the screen, at most [`MAX_WIDTH`]), everything else is kept in 64..=3840.
+pub fn requested_width(setting: u32) -> u32 {
+    if setting == 0 {
+        MAX_WIDTH
+    } else {
+        setting.clamp(64, MAX_WIDTH)
+    }
+}
+
+pub struct ScreenCapture {
+    handles: Handles,
+    join: Option<std::thread::JoinHandle<()>>,
+}
+
+impl Drop for ScreenCapture {
+    fn drop(&mut self) {
+        self.handles.stop.store(true, Ordering::Relaxed);
+        if let Some(j) = self.join.take() {
+            let _ = j.join();
+        }
+    }
+}
+
+impl ScreenCapture {
+    /// Spawn the capture thread for the current platform (or the test picture).
+    pub fn start(mut opts: CaptureOptions) -> Self {
+        opts.width = requested_width(opts.width);
+        let handles = Handles {
+            slot: Arc::new(Mutex::new(SharedFrame::black(
+                opts.width,
+                opts.width * 9 / 16,
+            ))),
+            screen: Arc::new(Mutex::new((0, 0))),
+            status: Arc::new(Mutex::new(CaptureStatus::Starting)),
+            restore_token: Arc::new(Mutex::new(opts.restore_token.clone())),
+            stop: Arc::new(AtomicBool::new(false)),
+            width: Arc::new(AtomicU32::new(opts.width)),
+        };
+        let h = handles.clone();
+        let join = std::thread::Builder::new()
+            .name("capture".into())
+            .spawn(move || {
+                if opts.test_image || demo::enabled() {
+                    demo::run(opts, h)
+                } else {
+                    platform::run(opts, h)
+                }
+            })
+            .ok();
+        if join.is_none() {
+            handles.fail("could not start the capture thread");
+        }
+        Self { handles, join }
+    }
+
+    /// Stop the backend without waiting for it: the thread is joined in the
+    /// background. A portal or GStreamer teardown can take a moment, and
+    /// neither the pipeline nor the next capture may wait for that.
+    pub fn stop(mut self) {
+        self.handles.stop.store(true, Ordering::Relaxed);
+        if let Some(j) = self.join.take() {
+            let _ = std::thread::Builder::new()
+                .name("capture-stop".into())
+                .spawn(move || {
+                    let _ = j.join();
+                });
+        }
+    }
+
+    pub fn status(&self) -> CaptureStatus {
+        self.handles.status.lock().unwrap().clone()
+    }
+
+    /// Ask for another frame width. The backend picks it up on its next frame,
+    /// so changing the resolution in the app costs no new portal session.
+    pub fn set_width(&self, width: u32) {
+        let width = requested_width(width);
+        if width != self.handles.width() {
+            self.handles.width.store(width, Ordering::Relaxed);
+        }
+    }
+
+    pub fn frame(&self) -> SharedFrame {
+        self.handles.slot.lock().unwrap().clone()
+    }
+
+    pub fn screen(&self) -> (u32, u32) {
+        *self.handles.screen.lock().unwrap()
+    }
+
+    pub fn restore_token(&self) -> Option<String> {
+        self.handles.restore_token.lock().unwrap().clone()
+    }
+}
+
+/// True when the test picture runs instead of the screen: the setting in the
+/// app, or `AMBILIGHT_DEMO=1` from the environment.
+pub fn test_picture(setting: bool) -> bool {
+    setting || demo::enabled()
+}
+
+/// `AMBILIGHT_DEMO=1`: the environment forces the test picture, the switch in
+/// the app cannot turn it off. The interface says so instead of doing nothing.
+pub fn test_picture_forced() -> bool {
+    demo::enabled()
+}
+
+/// Monitors the user can choose from (empty on Linux, where the portal asks).
+pub fn monitors() -> Vec<String> {
+    platform::monitors()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn native_resolution_is_not_the_smallest_one() {
+        // the interface offers "native" as capture width 0
+        assert_eq!(requested_width(0), MAX_WIDTH);
+        assert_eq!(requested_width(1), 64);
+        assert_eq!(requested_width(320), 320);
+        assert_eq!(requested_width(100_000), MAX_WIDTH);
+    }
+}

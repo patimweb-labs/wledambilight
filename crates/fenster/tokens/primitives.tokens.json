@@ -1,0 +1,117 @@
+{
+  "color": {
+    "$type": "color",
+    "nacht": {
+      "1000": { "$value": "#04060B" },
+      "950": { "$value": "#070A12" },
+      "900": { "$value": "#0C1220" },
+      "850": { "$value": "#121A2C" },
+      "800": { "$value": "#1A2438" },
+      "700": { "$value": "#22304A" },
+      "600": { "$value": "#3B4E72" },
+      "400": { "$value": "#7A8AA4" },
+      "300": { "$value": "#A3B1C6" }
+    },
+    "papier": {
+      "0": { "$value": "#FFFFFF" },
+      "50": { "$value": "#F5F7FA" },
+      "100": { "$value": "#EDF0F5" },
+      "200": { "$value": "#E1E6EE" },
+      "300": { "$value": "#CBD3DF" },
+      "500": { "$value": "#8A97AA" },
+      "600": { "$value": "#5B687D" },
+      "700": { "$value": "#46536A" },
+      "900": { "$value": "#0B1220" }
+    },
+    "grau": {
+      "1000": { "$value": "#050505" },
+      "950": { "$value": "#0A0A0A" },
+      "900": { "$value": "#101010" },
+      "850": { "$value": "#161616" },
+      "800": { "$value": "#1F1F1F" },
+      "700": { "$value": "#2A2A2A" },
+      "600": { "$value": "#3D3D3D" },
+      "500": { "$value": "#555555" },
+      "400": { "$value": "#7A7874" },
+      "300": { "$value": "#A8A5A0" },
+      "200": { "$value": "#D6D3CE" },
+      "100": { "$value": "#E8E6E1" }
+    },
+    "weiss": { "$value": "#FFFFFF" },
+    "cyan": {
+      "300": { "$value": "#7FF7FE" },
+      "400": { "$value": "#23F0FE" },
+      "500": { "$value": "#12C8D6" },
+      "700": { "$value": "#007C8C" },
+      "800": { "$value": "#00606D" },
+      "900": { "$value": "#004650" }
+    },
+    "glut": {
+      "300": { "$value": "#FFB25A" },
+      "400": { "$value": "#FD860E" },
+      "500": { "$value": "#E06F00" },
+      "700": { "$value": "#A84E00" },
+      "900": { "$value": "#5C2B00" }
+    },
+    "gruen": {
+      "400": { "$value": "#5BD68A" },
+      "700": { "$value": "#2E7D4F" }
+    },
+    "rot": {
+      "400": { "$value": "#FF6B6B" },
+      "700": { "$value": "#B3261E" }
+    },
+    "gelb": {
+      "300": { "$value": "#FFD84D" }
+    },
+    "ocker": {
+      "700": { "$value": "#8A5A00" }
+    },
+    "zeichen": { "$value": "#E9EEF6" }
+  },
+  "space": {
+    "$type": "dimension",
+    "0": { "$value": "0" },
+    "1": { "$value": "4px" },
+    "2": { "$value": "8px" },
+    "3": { "$value": "12px" },
+    "4": { "$value": "16px" },
+    "5": { "$value": "24px" },
+    "6": { "$value": "32px" }
+  },
+  "radius": {
+    "$type": "dimension",
+    "sm": { "$value": "3px" },
+    "md": { "$value": "6px" }
+  },
+  "font": {
+    "size": {
+      "$type": "dimension",
+      "xs": { "$value": "11px" },
+      "sm": { "$value": "12.5px" },
+      "md": { "$value": "14px" },
+      "lg": { "$value": "18px" },
+      "xl": { "$value": "22px" }
+    }
+  },
+  "size": {
+    "$type": "dimension",
+    "border": { "$value": "1px" },
+    "focus": { "$value": "2px" },
+    "control": {
+      "sm": { "$value": "26px" },
+      "md": { "$value": "32px" }
+    },
+    "panel": {
+      "geraete": { "$value": "290px" },
+      "inspektor": { "$value": "330px" }
+    },
+    "griff": { "$value": "10px" },
+    "led": { "$value": "6px" },
+    "zeile": { "$value": "120px" }
+  },
+  "duration": {
+    "$type": "duration",
+    "speichern": { "$value": "300ms" }
+  }
+}
