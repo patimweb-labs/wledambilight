@@ -336,6 +336,7 @@ pub fn regler(
                     .step_by(schritt as f64)
                     .show_value(false),
             )
+            .on_hover_cursor(egui::CursorIcon::PointingHand)
         })
         .inner;
     let name = beschriftung.to_string();

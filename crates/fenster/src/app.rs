@@ -179,7 +179,8 @@ impl Fenster {
 /// Handzeiger über allem, was man anklicken kann.
 ///
 /// egui setzt `Visuals::interact_cursor` nur bei `Button`; Schalter,
-/// Aufklapplisten, Reiter, Zeilen und Zonen blieben beim Pfeil. Hier einmal je
+/// Regler, Aufklapplisten, Reiter, Zeilen und Zonen blieben beim Pfeil.
+/// Gezählt wird, was sich klicken **oder ziehen** lässt (Regler). Hier einmal je
 /// Bild für alle: liegt der Zeiger über einem klickbaren Element und hat noch
 /// niemand einen eigenen Zeiger gewählt (Textfeld, Größengriff), wird es die
 /// Hand. Übernommen aus crosspoint.
@@ -188,7 +189,7 @@ pub fn handzeiger(ctx: &egui::Context) {
         ctx.viewport(|vp| vp.interact_widgets.hovered.iter().copied().collect());
     let klickbar = unter_zeiger.into_iter().any(|id| {
         ctx.read_response(id)
-            .is_some_and(|r| r.enabled() && r.sense.senses_click())
+            .is_some_and(|r| r.enabled() && (r.sense.senses_click() || r.sense.senses_drag()))
     });
     if klickbar {
         ctx.output_mut(|o| {
