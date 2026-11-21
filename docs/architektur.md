@@ -1,56 +1,93 @@
 # Architektur
 
-Stand 2026-11-02. Diese Datei beschreibt den Aufbau und die Grenzen; die Details
+Stand 2026-11-21. Diese Datei beschreibt den Aufbau und die Grenzen; die Details
 stehen in den Modulköpfen des Quelltexts.
 
 ## Zuschnitt
 
-Ein Crate (`wled-ambilight`) mit Kern **und** Tauri-Host, ein Frontend (`ui/`,
-Vue 3 + Vite). Der Kern ist eine Bibliothek (`src/lib.rs`), damit Tests und
-Oberfläche dieselbe Logik benutzen; das Fenster ist nur die Hülle.
+Reines Rust, ein Prozess, drei Pakete in einem Workspace
+([ADR 0001](adr/0001-fenster-in-egui.md)):
+
+| Paket | Pfad | Aufgabe |
+|---|---|---|
+| `wled-ambilight-core` (Bibliothek `wled_ambilight`) | `crates/core` | Aufnahme, Sampling, Engine, Ausgabe, Konfiguration, Telemetrie – keine Oberfläche |
+| `wled-ambilight-fenster` | `crates/fenster` | das Fenster in egui: Modell, Logik, Ansichten, Bausteine, Themes, Tray |
+| `wled-ambilight` | `src/main.rs` | Kommandozeile, Betrieb ohne Fenster (`--headless`) |
 
 ```mermaid
 flowchart TD
-    UI[ui/<br/>Vue 3 + Vite<br/>baut nach ui/dist]
-    CMD[src/commands.rs<br/>Befehle der Oberfläche]
-    STATE[src/state.rs<br/>AppState]
-    WORKER[src/worker.rs<br/>Aufnahme-Thread]
-    ENGINE[src/engine.rs<br/>Zustand, Rückmeldung]
-    SAMPLER[src/sampler.rs<br/>Zonen, Glättung]
-    CAP[capture/<br/>Bildschirm via Portal]
-    OUT[output/<br/>WLED, OpenRGB, Govee,<br/>Nanoleaf, Chroma]
-    CFG[src/config.rs<br/>config.json]
-    TRAY[src/tray.rs]
+    MAIN[src/main.rs<br/>Kommandozeile, --headless]
+    BETRIEB[fenster/betrieb.rs<br/>Lebenszyklus]
+    TRAY[fenster/tray/<br/>ksni · tray-icon]
+    APP[fenster/app.rs<br/>ein Bild]
+    ANS[fenster/ansichten/<br/>render modell → Aktionen]
+    LOGIK[fenster/logik.rs<br/>Aktionen ausführen]
+    MODELL[fenster/modell.rs<br/>Oberflaeche]
+    SHARED[core/worker.rs<br/>Shared]
+    WORKER[core/worker.rs<br/>Pipeline-Thread]
+    ENGINE[core/engine.rs]
+    SAMPLER[core/sampler.rs]
+    CAP[core/capture/<br/>Portal · WGC · SCK]
+    OUT[core/output/<br/>WLED, OpenRGB, Govee,<br/>Nanoleaf, Chroma]
+    CFG[core/config.rs<br/>config.json]
+    TEL[core/telemetry.rs]
 
-    UI -->|invoke| CMD
-    CMD --> STATE
-    STATE --> WORKER
+    MAIN --> BETRIEB
+    BETRIEB --> TRAY
+    BETRIEB --> APP
+    APP --> ANS
+    ANS -->|Aktion| LOGIK
+    LOGIK --> MODELL
+    MODELL --> ANS
+    LOGIK -->|set_config| SHARED
+    LOGIK -->|entprellt| CFG
+    TEL -->|lesen| SHARED
+    APP --> TEL
+    TRAY -->|paused| SHARED
+    SHARED --> WORKER
+    WORKER --> CAP
     WORKER --> ENGINE
     ENGINE --> SAMPLER
-    SAMPLER --> CAP
-    SAMPLER --> OUT
-    WORKER -->|Events| UI
-    TRAY --> STATE
-    CFG --> STATE
-    STATE --> CFG
+    ENGINE --> OUT
 ```
 
 ## Grenzen
 
-- **Die Oberfläche kennt keine Domäne.** Sie spricht nur Befehle (`invoke`) und
-  empfängt Ereignisse; gerechnet wird in Rust. Ein Zustand, den das Frontend
-  führt, kommt aus dem Modell — nicht aus einer eigenen Kopie.
-- **Aufnahme und Ausgabe laufen in einem eigenen Thread.** Die Oberfläche darf
-  nie auf das Portal oder ein Gerät warten; der Worker meldet Fortschritt als
-  Ereignis.
-- **Konfiguration ist eine Datei.** `config.json` ist die einzige Wahrheit für
-  Geräte, Zonen und Einstellungen; sie wird beim Ändern geschrieben, nicht beim
-  Beenden gesammelt.
-- **Plattformunterschiede sind Daten.** Aufnahme (Portal, Windows Graphics
-  Capture, CoreGraphics) und Tray liegen hinter `cfg`-Modulen, aber die
-  Oberfläche sieht davon nichts.
+- **Richtung der Abhängigkeiten:** `core ← fenster ← wled-ambilight`. Der Kern
+  kennt kein egui; alles dort ist ohne Fenster testbar.
+- **Eine Wahrheit.** Die Pipeline hält die gültige Konfiguration (`Shared`).
+  Das Fenster bearbeitet eine Fassung davon im Modell (`Oberflaeche::config`)
+  und gibt jede Änderung sofort mit `Shared::set_config` zurück; auf die Platte
+  geht sie entprellt (300 ms). Der Portal-Token gehört der Pipeline.
+- **`render(modell) → Aktionen`.** Die Ansichten lesen nur; jede Bedienung wird
+  zur `Aktion`, `logik::ausfuehren` führt sie aus. Sichtbarkeit folgt aus dem
+  Modell (`Option<GeraetDialog>`, `Suche`, `Reiter`), nicht aus Anweisungen.
+- **Netzwerkarbeit blockiert nie das Fenster.** Suche, Prüfen, Paaren und
+  OpenRGB laufen über den Trait `logik::Netz` in Threads und melden sich als
+  `Antwort` zurück. Tests setzen eine Attrappe ein.
+- **Aufnahme und Ausgabe laufen im Pipeline-Thread.** Das Fenster wartet nie
+  auf das Portal oder ein Gerät.
+- **Plattformunterschiede sind Daten.** Die Aufnahme liegt hinter `cfg`-Modulen
+  im Kern; das Fenster bekommt nur `app::Plattform` (nimmt sich die Aufnahme
+  selbst aus? kann die App den Monitor wählen?). Unter Linux friert das
+  Fenster im Hintergrund ein, damit es sich nicht selbst aufnimmt.
+- **Tray:** ksni unter Linux (eigener Thread, überdauert das Fenster), tray-icon
+  unter Windows/macOS (im Hauptthread, braucht die laufende
+  Ereignisschleife). Beim Autostart (`--minimized`) schließt das Fenster unter
+  Linux wirklich und öffnet sich auf „Fenster zeigen“ neu; unter Windows/macOS
+  wird es minimiert.
 
-## Abhängigkeiten
+## Gestaltung
 
-`ui/` → Tauri-Befehle → `state`/`engine`/`sampler`/`capture`/`output` →
-`config`. Keine Rückrichtung außer über Ereignisse.
+Farben, Größen und Abstände stehen in `crates/fenster/tokens/*.tokens.json`;
+`build.rs` macht daraus Konstanten. Drei Themes (dark, light, mono), Farben aus
+dem Logo ([ADR 0002](adr/0002-logo-als-svg.md)). `thema::tests` prüfen die
+Kontraste (WCAG) und dass Logo und Tokens dieselben Farben tragen.
+
+## Tests
+
+| Ebene | Wo |
+|---|---|
+| Kern (Pakete, Zonen, Engine, Ausgabe mit Attrappen-Servern) | `crates/core/src/**` |
+| Fensterlogik (Aktionen, Ziehen, Einpassen, Suche) | `crates/fenster/src/logik.rs` |
+| Fenster über AccessKit, ohne Bildschirm; Bildschirmfotos | `crates/fenster/tests/oberflaeche.rs` |

@@ -140,13 +140,18 @@ Der Stil steht in `docs/marke/icons.md`; hier nur die Regeln, an die sich Code h
 
 - **Name, Zweck, Zielgruppe:** WLED Ambilight — Bildschirmfarbe auf LEDs;
   Anwender mit WLED-Streifen, korrelierter Beleuchtung oder Gaming-Peripherie.
-- **Abweichende Befehle:** Oberfläche ist Tauri 2 + Vue (`ui/`). Vor jedem Bau:
-  `cd ui && npm ci && npm run build`. Release-Build der App:
-  `cargo build --release --features custom-protocol` (ohne das Feature zeigt das
-  Fenster auf `devUrl` und bleibt leer).
+- **Abweichende Befehle:** reines Rust (egui), kein `ui/`, kein npm
+  ([ADR 0001](docs/adr/0001-fenster-in-egui.md)). Prüfen:
+  `cargo fmt --all --check && cargo clippy --all-targets --workspace -- -D warnings && cargo test --workspace`.
+  Bildschirmfotos: `WLED_BILDER=docs/bilder cargo test -p wled-ambilight-fenster --test oberflaeche`.
+  Release-Build: `cargo build --release`.
+- **Struktur:** `crates/core` (Kern, Bibliothek `wled_ambilight`) ←
+  `crates/fenster` (egui: modell, logik, ansichten, bausteine, thema, tray) ←
+  Wurzelpaket (`src/main.rs`). Tokens in `crates/fenster/tokens/`.
+- **Marke (Ausnahme zu §8):** Das Logo ist eine Vorlage des Nutzers mit
+  Verläufen und Glühen; Quelle sind die SVGs in `assets/`, erzeugt wird mit
+  `packaging/icons/erzeugen.sh` ([ADR 0002](docs/adr/0002-logo-als-svg.md)).
 - **Besonderheiten:** Bildschirmaufnahme läuft über `xdg-desktop-portal`/PipeWire
   und GStreamer; im Flatpak `--talk-name=org.freedesktop.portal.Desktop`.
-  Das Flatpak braucht die `node22`-Extension und `weppelmann-ui` als eigenes
-  Modul; npm im Bau-Sandkasten bricht bei diesem Workspace ab, deshalb wird
-  `ui/dist` auf dem Host erzeugt und mitgeliefert.
+  Das Flatpak baut mit der freedesktop-Runtime und rust-stable, ohne Node.
 - **Kontakt/Issues:** https://github.com/patimweb-labs/wledambilight/issues
