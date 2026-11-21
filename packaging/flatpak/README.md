@@ -22,7 +22,7 @@ The release workflow builds the same manifest and attaches a
 
 ## Publishing on Flathub
 
-1. Make sure a tagged release exists and `docs/screenshot.png` is on `main`
+1. Make sure a tagged release exists and `docs/bilder/fenster-dark-1400.png` is on `main`
    (the metainfo links to it).
 2. Fork <https://github.com/flathub/flathub>, branch off `new-pr`.
 3. Copy the manifest and `cargo-sources.json` into the root of the fork and

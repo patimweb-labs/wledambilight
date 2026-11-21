@@ -1,25 +1,19 @@
-# Flatpak-Manifest für WLED Ambilight (Tauri-Oberfläche).
+# Flatpak-Manifest für WLED Ambilight (Oberfläche in egui, reines Rust).
 #
 # Lokal bauen (aus dem Projektwurzel):
 #   bash packaging/flatpak/update-cargo-sources.sh
 #   flatpak-builder --user --install --force-clean build-flatpak \
 #       packaging/flatpak/io.github.smotherer007.WledAmbilight.yml
 #
-# Bauart: Rust und Node bauen im Sandkasten. Die Oberfläche ist eine
-# Vue-Anwendung; sie wird vor dem Rust-Build erzeugt (`ui/dist`), weil Tauri die
-# Dateien einbettet.
-#
-# ACHTUNG, ungeprüft: Die Komponentenbibliothek liegt in einem eigenen Repository
-# (weppelmann-ui). Der Bau erwartet sie als Ordner `weppelmann-ui` neben diesem
-# Projekt (Quelle unten) oder als npm-Paket aus einem privaten Registry. Für
-# Flathub muss die Quelle auf einen Git-Tag zeigen statt auf einen lokalen Pfad.
+# Für Flathub die `dir`-Quelle unten durch den Git-Tag eines Releases ersetzen
+# (siehe packaging/flatpak/README.md). Kein Node, kein WebKit und keine
+# AppIndicator-Bibliothek mehr: das Fenster ist egui, der Tray ksni (D-Bus).
 id: io.github.smotherer007.WledAmbilight
-runtime: org.gnome.Platform
-runtime-version: '51'
-sdk: org.gnome.Sdk
+runtime: org.freedesktop.Platform
+runtime-version: '25.08'
+sdk: org.freedesktop.Sdk
 sdk-extensions:
   - org.freedesktop.Sdk.Extension.rust-stable
-  - org.freedesktop.Sdk.Extension.node22
 command: wled-ambilight
 
 finish-args:
@@ -30,47 +24,28 @@ finish-args:
   - --device=dri
   # UDP/HTTP zu den Geräten, mDNS-Suche.
   - --share=network
-  # Taskleisten-Symbol.
+  # Taskleisten-Symbol (StatusNotifierItem).
   - --talk-name=org.kde.StatusNotifierWatcher
-  # Bildschirmaufnahme läuft über das ScreenCast-Portal (kein Zusatzrecht).
+  # Bildschirmaufnahme über das ScreenCast-Portal, GStreamer aus der Runtime.
   - --talk-name=org.freedesktop.portal.Desktop
 
 build-options:
-  append-path: /usr/lib/sdk/rust-stable/bin:/usr/lib/sdk/node22/bin
+  append-path: /usr/lib/sdk/rust-stable/bin
   env:
     CARGO_HOME: /run/build/wled-ambilight/cargo
     CARGO_NET_OFFLINE: 'true'
-    WPM_UI_DIR: /run/build/weppelmann-ui
 
 modules:
-  # Tray-Symbol: Tauri baut libappindicator-Sys ein und bricht ohne die
-  # Bibliothek beim Start ab ("Failed to load ayatana-appindicator3").
-  # Vor dem Bau einmal holen:
-  #   git clone --depth 1 https://github.com/flathub/shared-modules.git \
-  #       packaging/flatpak/shared-modules
-  - shared-modules/libayatana-appindicator/libayatana-appindicator-gtk3.json
-
-  # Die Oberflaeche wird VOR dem Flatpak-Bau auf dem Host erzeugt:
-  #   cd ui && npm ci && npm run build
-  # Grund: npm im Build-Sandkasten (10.9.9 der node22-Extension) bricht bei
-  # diesem Workspace mit "Exit handler never called!" ab. Fuer Flathub muss
-  # das spaeter auf einen npm-Aufruf im Sandkasten zurueck (oder auf eine
-  # feste Node-Version), hier zaehlt ein reproduzierbarer lokaler Bau.
   - name: wled-ambilight
     buildsystem: simple
-    build-options:
-      env:
-        HOME: /tmp
     build-commands:
       - cargo --offline fetch --manifest-path Cargo.toml --verbose
-      # `custom-protocol` ist Pflicht: ohne das Feature bettet Tauri die
-      # gebaute Oberflaeche nicht ein, das Fenster fragt stattdessen die
-      # devUrl ab und bleibt auf der Hintergrundfarbe stehen (schwarz).
-      - cargo --offline build --release --locked --features custom-protocol --verbose
+      - cargo --offline build --release --locked --verbose
       - install -Dm755 target/release/wled-ambilight ${FLATPAK_DEST}/bin/wled-ambilight
       - install -Dm644 packaging/linux/${FLATPAK_ID}.desktop ${FLATPAK_DEST}/share/applications/${FLATPAK_ID}.desktop
       - install -Dm644 packaging/linux/${FLATPAK_ID}.metainfo.xml ${FLATPAK_DEST}/share/metainfo/${FLATPAK_ID}.metainfo.xml
       - install -Dm644 assets/icon.svg ${FLATPAK_DEST}/share/icons/hicolor/scalable/apps/${FLATPAK_ID}.svg
+      - install -Dm644 assets/wled-ambilight-symbolic.svg ${FLATPAK_DEST}/share/icons/hicolor/symbolic/apps/${FLATPAK_ID}-symbolic.svg
       - for s in 16 24 32 48 64 128 256 512; do install -Dm644 assets/icons/icon-$s.png ${FLATPAK_DEST}/share/icons/hicolor/${s}x${s}/apps/${FLATPAK_ID}.png; done
     sources:
       - type: dir
@@ -80,5 +55,4 @@ modules:
           - build-flatpak
           - build-dir
           - .flatpak-builder
-          - ui/node_modules
       - cargo-sources.json

@@ -12,10 +12,6 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
-  # Kein WPM_UI_DIR: ui/vite.config.ts nimmt dann den Nachbarordner
-  # `../../weppelmann-ui` — genau den, den auch `npm install` über die
-  # file:-Verweise in ui/package.json anlegt. Ein Env-Wert hier hat nach dem
-  # Verschieben der Bibliothek auf einen Pfad gezeigt, den es nicht mehr gab.
 
 jobs:
   fmt:
@@ -43,50 +39,23 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
-      # Die geteilte Komponentenbibliothek ist öffentlich; ein Token ist nicht
-      # nötig (und war ohne gesetztes Secret die Ursache für den Abbruch
-      # "Input required and not supplied: token").
-      - name: Oberflächen-Bibliothek
-        uses: actions/checkout@v7
-        with:
-          repository: Smotherer007/weppelmann-ui
-          path: weppelmann-ui
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
-      - name: Systembibliotheken (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq libwebkit2gtk-4.1-dev libayatana-appindicator3-dev \
-            librsvg2-dev patchelf libgtk-3-dev
-      - name: Tokens bauen
-        working-directory: weppelmann-ui
-        run: |
-          npm install --no-audit --no-fund
-          npm run -w @weppelmann/tokens build
-      # `ui/package.json` verweist per `file:../../weppelmann-ui` auf die
-      # Bibliothek **neben** dem Projekt. Im Lauf liegt sie im Projekt, deshalb
-      # wird sie erst nach dem Bau der Tokens einen Ordner höher geschoben.
-      - name: Bibliothek neben das Projekt legen
-        shell: bash
-        run: mv "$GITHUB_WORKSPACE/weppelmann-ui" "$GITHUB_WORKSPACE/../weppelmann-ui"
-      - name: Oberfläche bauen
-        run: |
-          npm install --no-audit --no-fund
-          npm --prefix ui run build
+      # Das Fenster ist egui: Wayland, X11 und OpenGL werden zur Laufzeit
+      # geladen, zum Bauen braucht es keine -devel-Pakete. Der Tray unter
+      # Linux ist ksni (D-Bus in reinem Rust), ohne GTK.
       # Warnungen erscheinen als Hinweis, sie brechen den Bau nicht: jede neue
       # Rust-Version bringt neue Lints. Echte Fehler (correctness) brechen ab.
       - name: Clippy
-        run: cargo clippy --all-targets --locked -- -D clippy::correctness
+        run: cargo clippy --all-targets --locked --workspace -- -D clippy::correctness
+      # Die Oberflächentests (egui_kittest) bedienen das Fenster über
+      # AccessKit, ohne Bildschirm und ohne GPU.
       - name: Tests
-        run: cargo test --locked
+        run: cargo test --locked --workspace
       - name: Build
-        run: cargo build --release --locked --features custom-protocol
+        run: cargo build --release --locked
 
   metadata:
     name: Linux metadata
@@ -115,10 +84,9 @@ jobs:
           package=$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -1)
           lock=$(sed -n '/^name = "wled-ambilight"$/,/^version/p' Cargo.lock | sed -n 's/^version = "\(.*\)"$/\1/p' | head -1)
           manifest=$(jq -r '.["."]' .release-please-manifest.json)
-          tauri=$(jq -r '.version' tauri.conf.json)
           metainfo=$(sed -n 's/.*<release version="\([^"]*\)".*/\1/p' packaging/linux/*.metainfo.xml | head -1)
           status=0
-          for pair in "Cargo.toml:$package" "Cargo.lock:$lock" "Manifest:$manifest" "tauri.conf.json:$tauri" "metainfo:$metainfo"; do
+          for pair in "Cargo.toml:$package" "Cargo.lock:$lock" "Manifest:$manifest" "metainfo:$metainfo"; do
             printf '%-20s %s\n' "${pair%%:*}" "${pair#*:}"
             [ "${pair#*:}" = "$package" ] || status=1
           done
