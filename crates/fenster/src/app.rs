@@ -164,6 +164,7 @@ impl Fenster {
         for a in aktionen {
             logik::ausfuehren(a, &mut self.o, &self.kern, jetzt);
         }
+        handzeiger(&ctx);
         if self.o.speichern_ab.is_some_and(|t| jetzt >= t) {
             self.speichern();
         }
@@ -172,5 +173,28 @@ impl Fenster {
             (false, true) => 100,
             (false, false) => 250,
         }));
+    }
+}
+
+/// Handzeiger über allem, was man anklicken kann.
+///
+/// egui setzt `Visuals::interact_cursor` nur bei `Button`; Schalter,
+/// Aufklapplisten, Reiter, Zeilen und Zonen blieben beim Pfeil. Hier einmal je
+/// Bild für alle: liegt der Zeiger über einem klickbaren Element und hat noch
+/// niemand einen eigenen Zeiger gewählt (Textfeld, Größengriff), wird es die
+/// Hand. Übernommen aus crosspoint.
+pub fn handzeiger(ctx: &egui::Context) {
+    let unter_zeiger: Vec<egui::Id> =
+        ctx.viewport(|vp| vp.interact_widgets.hovered.iter().copied().collect());
+    let klickbar = unter_zeiger.into_iter().any(|id| {
+        ctx.read_response(id)
+            .is_some_and(|r| r.enabled() && r.sense.senses_click())
+    });
+    if klickbar {
+        ctx.output_mut(|o| {
+            if o.cursor_icon == egui::CursorIcon::Default {
+                o.cursor_icon = egui::CursorIcon::PointingHand;
+            }
+        });
     }
 }

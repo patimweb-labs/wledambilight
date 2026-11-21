@@ -81,8 +81,8 @@
   },
   "radius": {
     "$type": "dimension",
-    "sm": { "$value": "3px" },
-    "md": { "$value": "6px" }
+    "sm": { "$value": "0" },
+    "md": { "$value": "0" }
   },
   "font": {
     "size": {

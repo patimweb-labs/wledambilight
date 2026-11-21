@@ -124,6 +124,8 @@ pub fn anwenden(ctx: &egui::Context, thema: Thema) {
     v.text_cursor.stroke = Stroke::new(SIZE_FOCUS, f.focus_ring);
     v.interact_cursor = Some(egui::CursorIcon::PointingHand);
     v.slider_trailing_fill = true;
+    // Eckig: auch der Reglergriff ist ein Rechteck (schmal wie ein Fader).
+    v.handle_shape = egui::style::HandleShape::Rect { aspect_ratio: 0.5 };
 
     let w = &mut v.widgets;
     for (zustand, flaeche, linie, schrift) in [
@@ -178,6 +180,13 @@ pub fn anwenden(ctx: &egui::Context, thema: Thema) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Keine runden Ecken – nirgends (Wunsch des Nutzers).
+    #[test]
+    fn alles_ist_eckig() {
+        assert_eq!(RADIUS_MD, 0.0);
+        assert_eq!(RADIUS_SM, 0.0);
+    }
 
     #[test]
     fn namen_hin_und_zurueck() {

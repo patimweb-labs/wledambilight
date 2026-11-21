@@ -249,6 +249,7 @@ fn schalter_mit_namen(
         };
     let (rect, antwort) =
         ui.allocate_exact_size(Vec2::new(breite, thema::SIZE_CONTROL_SM), Sense::click());
+    let antwort = antwort.on_hover_cursor(egui::CursorIcon::PointingHand);
     let antwort = if beschriftung.is_empty() {
         antwort.on_hover_text(name)
     } else {
@@ -267,18 +268,23 @@ fn schalter_mit_namen(
         } else {
             (f.border_strong, f.text_default)
         };
-        p.rect_filled(b, CornerRadius::same((bahn.y / 2.0) as u8), grund);
-        let r = bahn.y / 2.0 - thema::SIZE_FOCUS;
+        // Eckig wie alles andere: Bahn und Knopf sind Rechtecke.
+        p.rect_filled(b, CornerRadius::ZERO, grund);
+        let kante = bahn.y - 2.0 * thema::SIZE_FOCUS;
         let x = if an {
             b.right() - bahn.y / 2.0
         } else {
             b.left() + bahn.y / 2.0
         };
-        p.circle_filled(egui::pos2(x, b.center().y), r, knopf);
+        p.rect_filled(
+            Rect::from_center_size(egui::pos2(x, b.center().y), Vec2::splat(kante)),
+            CornerRadius::ZERO,
+            knopf,
+        );
         if antwort.has_focus() {
             p.rect_stroke(
                 b.expand(thema::SIZE_FOCUS),
-                CornerRadius::same((bahn.y / 2.0 + thema::SIZE_FOCUS) as u8),
+                CornerRadius::ZERO,
                 Stroke::new(thema::SIZE_FOCUS, f.focus_ring),
                 StrokeKind::Outside,
             );
@@ -392,7 +398,9 @@ pub fn umschalter<T: PartialEq + Clone>(
             .fill(if an { f.accent_default } else { f.bg_input })
             .stroke(Stroke::new(thema::SIZE_BORDER, f.border_subtle))
             .corner_radius(CornerRadius::ZERO);
-            let r = ui.add(knopf);
+            let r = ui
+                .add(knopf)
+                .on_hover_cursor(egui::CursorIcon::PointingHand);
             let name = t.clone();
             r.widget_info(|| WidgetInfo::selected(egui::Role::RadioButton, true, an, &name));
             if r.clicked() && !an {
@@ -481,9 +489,12 @@ pub fn abzeichen(ui: &mut Ui, f: &Farben, ton: Ton, inhalt: &str) -> Response {
         Stroke::new(thema::SIZE_BORDER, f.border_subtle),
         StrokeKind::Inside,
     );
-    p.circle_filled(
-        egui::pos2(rect.left() + thema::SPACE_1 + punkt / 2.0, rect.center().y),
-        punkt / 2.0 - 1.0,
+    p.rect_filled(
+        Rect::from_center_size(
+            egui::pos2(rect.left() + thema::SPACE_1 + punkt / 2.0, rect.center().y),
+            Vec2::splat(punkt - 2.0 * thema::SIZE_BORDER),
+        ),
+        CornerRadius::ZERO,
         farbe,
     );
     p.galley(
@@ -504,12 +515,12 @@ pub fn fortschritt(ui: &mut Ui, f: &Farben, anteil: f32, zuviel: bool) {
         Sense::hover(),
     );
     let p = ui.painter();
-    p.rect_filled(rect, CornerRadius::same(2), f.bg_input);
+    p.rect_filled(rect, CornerRadius::ZERO, f.bg_input);
     let mut voll = rect;
     voll.set_width(rect.width() * anteil.clamp(0.0, 1.0));
     p.rect_filled(
         voll,
-        CornerRadius::same(2),
+        CornerRadius::ZERO,
         if zuviel {
             f.status_error
         } else {
