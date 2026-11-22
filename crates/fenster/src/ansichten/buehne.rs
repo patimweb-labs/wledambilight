@@ -286,7 +286,12 @@ fn zone(
         schrift.clone(),
         f.text_on_accent,
     );
-    let beschriftung = format!("{} · {}", z.name, logik::led_text(start, z.count));
+    let beschriftung = format!(
+        "{} · {} {}",
+        z.name,
+        logik::led_text(start, z.count),
+        logik::richtung(z)
+    );
     let pos = Pos2::new(marke.right() + thema::SPACE_1, marke.center().y);
     // Schatten unter der Schrift, damit sie auf jedem Bild lesbar bleibt.
     innen.text(

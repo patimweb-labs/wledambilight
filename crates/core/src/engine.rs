@@ -774,12 +774,13 @@ mod tests {
             &frame[(counts[0] + counts[1]) as usize..(counts[0] + counts[1] + counts[2]) as usize];
         let left = &frame[(120 - counts[3]) as usize..];
 
-        // top and bottom run left -> right, top sits at the top of the picture
-        assert!(top[1][0] > top[0][0] && bottom[1][0] > bottom[0][0]);
+        // one loop clockwise: top left -> right, right downwards, bottom
+        // right -> left, left upwards; top sits at the top of the picture
+        assert!(top[1][0] > top[0][0], "top edge runs to the right");
+        assert!(bottom[1][0] < bottom[0][0], "bottom edge runs to the left");
         assert!(mean(top, 1) < mean(bottom, 1), "top rows over bottom rows");
-        // left and right run top -> bottom
         assert!(right[1][1] > right[0][1], "right edge runs downwards");
-        assert!(left[1][1] > left[0][1], "left edge runs downwards");
+        assert!(left[1][1] < left[0][1], "left edge runs upwards");
         assert!(
             mean(right, 0) > mean(left, 0),
             "right columns right of left"
