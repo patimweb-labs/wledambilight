@@ -150,9 +150,12 @@ starten. Ist der Build nicht notarisiert, meldet macOS, die App „kann nicht
    Gerät auf **+** klicken. Es bekommt eine Zone mit allen LEDs an einer freien
    Bildschirmkante.
 3. **Zonen platzieren.** Für einen Streifen rund um den Bildschirm die Zone
-   auswählen und **Auf 4 Kanten** klicken. Richtung prüfen: der kleine Pfeil in
-   jeder Zone markiert LED 0. Läuft das Licht falsch herum, beim Gerät
-   **Reihenfolge umkehren** einschalten.
+   auswählen und **Auf 4 Kanten** klicken. Die vier Zonen bilden einen Ring im
+   Uhrzeigersinn ab oben links (unten und links laufen rückwärts). Richtung
+   prüfen: der Pfeil hinter dem LED-Bereich jeder Zone zeigt von LED 0 zur
+   letzten LED. Stimmt eine einzelne Seite nicht, bei dieser Zone **Richtung
+   umkehren** einschalten; läuft der ganze Streifen falsch herum, beim Gerät
+   **Streifen läuft rückwärts**.
 4. **Bild abstimmen** im Reiter *Bild*. Alles wird automatisch gespeichert.
 
 ## Begriffe
@@ -173,10 +176,12 @@ starten. Ist der Build nicht notarisiert, meldet macOS, die App „kann nicht
   Zone** auf oben, rechts, unten und links auf, nach Kantenlänge. Andere Zonen
   desselben Geräts bleiben unangetastet; eine Zone mit fester erster LED behält
   ihren Platz auf dem Streifen.
-- **Waagerecht / senkrecht** – waagerechte Zonen laufen links → rechts,
-  senkrechte oben → unten. Ist ein Streifen andersherum verkabelt, wird das pro
-  Gerät mit **Reihenfolge umkehren** korrigiert (spiegelt den ganzen
-  Streifen inklusive der Reihenfolge aufgeteilter Zonen).
+- **Waagerecht / senkrecht, Richtung** – waagerechte Zonen laufen links →
+  rechts, senkrechte oben → unten. **Richtung umkehren** dreht eine einzelne
+  Zone um (rechts → links, unten → oben) und ist unabhängig von *Senkrecht*:
+  ein Streifen im Ring läuft an einer Seite hinunter und an der anderen hinauf.
+  **Streifen läuft rückwärts** beim Gerät spiegelt dagegen den ganzen Streifen
+  samt Reihenfolge der Zonen.
 - **Aufnahmeauflösung** – der Bildschirm wird auf einen kleinen Puffer
   verkleinert (Standard 320 px breit). Das ist die Genauigkeit der Zonen; höhere
   Werte erlauben feinere Zonen und kosten etwas mehr CPU.

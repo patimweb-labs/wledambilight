@@ -142,9 +142,12 @@ is not notarised, macOS says the app “cannot be checked”: right-click the ap
    **+** next to a device. It gets one zone with all its LEDs on a free
    screen edge.
 3. **Place the zones.** For a strip running around the screen select its
-   zone and click **Split to 4 edges**. Check the direction: the small chevron
-   in each zone marks LED 0. If the light runs the wrong way, switch on
-   **Reverse order** for the device.
+   zone and click **Split to 4 edges**. The four zones form one loop clockwise
+   from the top left (bottom and left run backwards). Check the direction: the
+   arrow next to each zone's LED range points from LED 0 to its last LED. If a
+   single side is wrong, switch on **Reverse direction** for that zone; if the
+   whole strip runs the wrong way, switch on **Strip runs backwards** for the
+   device.
 4. **Tune the picture** on the *Picture* tab. Settings are saved automatically.
 
 ## Concepts
@@ -155,10 +158,11 @@ is not notarised, macOS says the app “cannot be checked”: right-click the ap
   the order on the strip** (`LED 0–36`, `LED 37–58`, …). The LED count of a
   zone is independent of its size: the rectangle is cut into equal cells, one
   per LED, and each cell is averaged.
-- **Horizontal / vertical** – horizontal zones run left → right, vertical
-  zones top → bottom. A strip that is wired the other way round is fixed per
-  device with **Reverse order** (this mirrors the whole strip, including
-  the order of split zones).
+- **Horizontal / vertical, direction** – horizontal zones run left → right,
+  vertical zones top → bottom. **Reverse direction** flips one zone (right →
+  left, bottom → top) and is independent of *Vertical*: a strip in a loop runs
+  down one side and up the other. **Strip runs backwards** on the device
+  mirrors the whole strip instead, including the order of the zones.
 - **LED block** – the section of the strip a zone drives. It sits on the
   *Zones* tab under *First LED*: the number field or the `−10 −1 +1 +10`
   buttons move it along the whole strip, `Auto` packs the zone behind the one
