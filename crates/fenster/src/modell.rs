@@ -149,7 +149,8 @@ impl Oberflaeche {
 }
 
 /// Welche Zonen „Auf 4 Kanten“ und „Gerät pro Kante“ anlegen – in der
-/// Reihenfolge, in der ein Streifen üblicherweise läuft.
+/// Reihenfolge, in der ein Streifen üblicherweise läuft (im Uhrzeigersinn ab
+/// oben links; bei einem Streifen laufen unten und links darum rückwärts).
 pub const KANTEN: [ZonePreset; 4] = [
     ZonePreset::Top,
     ZonePreset::Right,

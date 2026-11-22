@@ -304,6 +304,17 @@ fn zonen(ui: &mut Ui, f: &Farben, o: &Oberflaeche, a: &mut Vec<Aktion>) {
     ) {
         neu.vertical = an;
     }
+    if let Some(an) = bausteine::schalter(
+        ui,
+        f,
+        z.reverse,
+        tr(
+            "Richtung umkehren (LED 0 am anderen Ende)",
+            "Reverse direction (LED 0 at the other end)",
+        ),
+    ) {
+        neu.reverse = an;
+    }
     bausteine::abschnitt(ui, f, tr("Größe im Aufnahmebild", "Size in the capture"));
     if let Some(w) = bausteine::regler(
         ui,

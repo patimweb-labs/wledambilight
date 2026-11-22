@@ -97,6 +97,7 @@ fn beispiel(thema: Thema) -> (Fenster, Arc<Shared>) {
     ] {
         let mut z = Zone::preset(kante, "192.168.1.42".into(), 30, [0, 0, 0]);
         z.name = name.into();
+        z.reverse = kante.reversed_in_loop();
         cfg.zones.push(z);
     }
     let mut z = Zone::preset(ZonePreset::Full, tastatur_id(), 104, [0, 0, 0]);
@@ -297,6 +298,33 @@ fn zonen_liste_und_pfeiltasten() {
     h.run_steps(2);
     let gross = shared.config().zones[4].y;
     assert!((nachher - gross - 0.05).abs() < 1e-4, "{nachher} → {gross}");
+}
+
+/// Issue #32: Senkrecht und Richtung sind zwei eigene Schalter, die sich
+/// nicht gegenseitig ausschalten.
+#[test]
+fn zonenrichtung_ist_unabhaengig_von_senkrecht() {
+    let (f, shared) = beispiel(Thema::Dunkel);
+    // Hoch genug, dass der Inspektor ohne Scrollen alle Schalter zeigt.
+    let mut h = harness(f, (1400.0, 1300.0));
+    h.run_steps(3);
+    h.get_by_label("Zone Rechts").click();
+    h.run_steps(2);
+    h.get_by_label("Richtung umkehren (LED 0 am anderen Ende)")
+        .click();
+    h.run_steps(2);
+    let z = &shared.config().zones[1];
+    assert_eq!(z.name, "Rechts");
+    assert!(z.reverse && z.vertical, "beides an");
+    // Links lief schon rückwärts; Senkrecht ausschalten lässt die Richtung.
+    h.get_by_label("Zone Links").click();
+    h.run_steps(2);
+    h.get_by_label("Senkrecht (LEDs von oben nach unten)")
+        .click();
+    h.run_steps(2);
+    let z = &shared.config().zones[3];
+    assert_eq!(z.name, "Links");
+    assert!(z.reverse && !z.vertical, "Richtung bleibt");
 }
 
 #[test]

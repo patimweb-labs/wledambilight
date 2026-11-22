@@ -50,6 +50,7 @@ pub fn layout_hash(cfg: &Config) -> u64 {
         z.device.hash(&mut h);
         z.enabled.hash(&mut h);
         z.vertical.hash(&mut h);
+        z.reverse.hash(&mut h);
         z.count.hash(&mut h);
         z.offset.hash(&mut h);
         for f in [z.x, z.y, z.w, z.h, z.gain] {
@@ -102,7 +103,9 @@ pub fn build(cfg: &Config, w: u32, h: u32) -> Plan {
                         y1,
                     }
                 };
-                let led = start + i;
+                // the cell walks the screen forward; a reversed zone counts its
+                // LEDs from the other end
+                let led = start + if zone.reverse { n - 1 - i } else { i };
                 if led < dev.led_count as u32 {
                     if let Some(g) = gains.get_mut(led as usize) {
                         *g = zone.gain;
@@ -278,5 +281,39 @@ mod tests {
         sample(&plan, &frame_tb(10, 100), 0.0, &mut out);
         assert_eq!(out[0][0][0] as u8, 255, "LED 0 white = top half");
         assert_eq!(out[0][3][0] as u8, 0, "LED 3 black = bottom half");
+    }
+
+    /// Issue #32: a strip in a loop runs up on one side and down on the other.
+    #[test]
+    fn reversed_vertical_zone_reads_bottom_to_top() {
+        let mut z = zone();
+        z.vertical = true;
+        z.reverse = true;
+        let cfg = cfg_with(z);
+        let plan = build(&cfg, 10, 100);
+        let mut out = Vec::new();
+        sample(&plan, &frame_tb(10, 100), 0.0, &mut out);
+        assert_eq!(out[0][0][0] as u8, 0, "LED 0 black = bottom half");
+        assert_eq!(out[0][3][0] as u8, 255, "LED 3 white = top half");
+    }
+
+    #[test]
+    fn reversed_horizontal_zone_reads_right_to_left() {
+        let mut z = zone();
+        z.reverse = true;
+        let cfg = cfg_with(z);
+        let plan = build(&cfg, 100, 10);
+        let mut out = Vec::new();
+        sample(&plan, &frame_lr(100, 10), 0.0, &mut out);
+        assert_eq!(out[0][0][0] as u8, 0, "LED 0 black = right half");
+        assert_eq!(out[0][3][0] as u8, 255, "LED 3 white = left half");
+    }
+
+    #[test]
+    fn layout_hash_tracks_the_direction() {
+        let mut cfg = cfg_with(zone());
+        let a = layout_hash(&cfg);
+        cfg.zones[0].reverse = true;
+        assert_ne!(a, layout_hash(&cfg));
     }
 }

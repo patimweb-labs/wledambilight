@@ -141,6 +141,11 @@ pub struct Zone {
     pub count: u16,
     /// true: LEDs run top -> bottom, false: left -> right
     pub vertical: bool,
+    /// true: the direction is flipped (bottom -> top, right -> left). A strip
+    /// running in a loop behind the screen needs this on one of two opposite
+    /// sides (issue #32).
+    #[serde(default)]
+    pub reverse: bool,
     /// per zone gain
     pub gain: f32,
     pub enabled: bool,
@@ -168,6 +173,7 @@ impl Zone {
             h,
             count: count.max(1),
             vertical,
+            reverse: false,
             gain: 1.0,
             enabled: true,
             offset: None,
@@ -186,6 +192,15 @@ pub enum ZonePreset {
     #[allow(dead_code)]
     Full,
     Custom,
+}
+
+impl ZonePreset {
+    /// One strip in a loop behind the screen, clockwise from the top left:
+    /// right along the top, down the right, back along the bottom, up the
+    /// left. Bottom and left therefore run backwards (issue #32).
+    pub fn reversed_in_loop(self) -> bool {
+        matches!(self, ZonePreset::Bottom | ZonePreset::Left)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -316,14 +331,14 @@ impl Config {
 
     pub fn from_json(text: &str) -> Result<Self, serde_json::Error> {
         let mut v: serde_json::Value = serde_json::from_str(text)?;
-        // Zones used to carry flip_h/flip_v. A reversed strip is a property of the
-        // device, so fold the old flags into it (safe for the one-zone case).
+        // Zones used to carry flip_h/flip_v. Those mirrored the whole strip, so
+        // fold them into the device (safe for the one-zone case). `reverse` on a
+        // zone is the direction of that zone alone and stays where it is.
         let mut flip_devices: Vec<String> = Vec::new();
         if let Some(zones) = v.get_mut("zones").and_then(|z| z.as_array_mut()) {
             for z in zones.iter_mut() {
                 let flipped = z.get("flip_h").and_then(|b| b.as_bool()).unwrap_or(false)
-                    || z.get("flip_v").and_then(|b| b.as_bool()).unwrap_or(false)
-                    || z.get("reverse").and_then(|b| b.as_bool()).unwrap_or(false);
+                    || z.get("flip_v").and_then(|b| b.as_bool()).unwrap_or(false);
                 if flipped {
                     if let Some(dev) = z.get("device").and_then(|d| d.as_str()) {
                         flip_devices.push(dev.to_string());
@@ -332,7 +347,6 @@ impl Config {
                 if let Some(o) = z.as_object_mut() {
                     o.remove("flip_h");
                     o.remove("flip_v");
-                    o.remove("reverse");
                 }
             }
         }
@@ -504,7 +518,8 @@ impl Config {
     }
 
     /// Replace zone `i` by four edge zones (top, right, bottom, left) and
-    /// share its LEDs out over them by edge length. `aspect` is
+    /// share its LEDs out over them by edge length. The edges form one loop
+    /// clockwise, so bottom and left run backwards (issue #32). `aspect` is
     /// height/width of the screen. Returns the four LED counts, or `None` when
     /// the zone has fewer than four LEDs (four edges need at least one each).
     ///
@@ -529,6 +544,7 @@ impl Config {
             z.gain = zone.gain;
             z.enabled = zone.enabled;
             z.vertical = kind == ZonePreset::Left || kind == ZonePreset::Right;
+            z.reverse = kind.reversed_in_loop();
             if let Some(start) = next.as_mut() {
                 z.offset = Some(*start as u16);
                 *start += counts[k] as u32;
@@ -701,6 +717,29 @@ mod tests {
         // configs from 0.2.0 have no kind: they are WLED devices
         assert_eq!(cfg.devices[0].kind, DeviceKind::Wled);
         assert_eq!(cfg.devices[0].token, None);
+        // old zones have no direction of their own
+        assert!(!cfg.zones[0].reverse);
+    }
+
+    /// Issue #32: the direction belongs to the zone, not to the strip.
+    #[test]
+    fn zone_reverse_stays_on_the_zone() {
+        let json = r#"{
+            "devices": [{"id":"a","name":"A","host":"a","led_count":20,"enabled":true,
+                         "protocol":"Ddp","brightness":1.0,"reverse":false,"bgr":false}],
+            "zones": [{"name":"L","device":"a","x":0,"y":0,"w":0.1,"h":1,"count":10,
+                       "vertical":true,"reverse":true,"gain":1,"enabled":true,"offset":null,
+                       "color":[1,2,3]},
+                      {"name":"R","device":"a","x":0.9,"y":0,"w":0.1,"h":1,"count":10,
+                       "vertical":true,"gain":1,"enabled":true,"offset":null,
+                       "color":[1,2,3]}]
+        }"#;
+        let cfg = Config::from_json(json).unwrap();
+        assert!(!cfg.devices[0].reverse);
+        assert!(cfg.zones[0].reverse && cfg.zones[0].vertical);
+        assert!(!cfg.zones[1].reverse && cfg.zones[1].vertical);
+        let again = Config::from_json(&serde_json::to_string(&cfg).unwrap()).unwrap();
+        assert_eq!(again.zones, cfg.zones);
     }
 
     #[test]

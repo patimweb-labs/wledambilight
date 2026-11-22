@@ -315,6 +315,8 @@ pub fn ausfuehren(a: Aktion, o: &mut Oberflaeche, k: &Kern, jetzt: Instant) {
             for (kante, anzahl) in KANTEN.into_iter().zip(kanten_leds(d.led_count)) {
                 let mut z = Zone::preset(kante, d.id.clone(), anzahl, [0, 0, 0]);
                 z.name = kanten_name(kante).to_string();
+                // Ein Streifen rundherum: unten und links zurück (Issue #32).
+                z.reverse = kante.reversed_in_loop();
                 o.config.zones.push(z);
             }
             o.aktiv = erste;
@@ -557,6 +559,16 @@ pub fn led_text(start: u32, anzahl: u16) -> String {
         format!("LED {start}–{}", start + anzahl as u32 - 1)
     } else {
         format!("LED {start}")
+    }
+}
+
+/// Pfeil von LED 0 zur letzten LED einer Zone, wie sie im Bild liegt.
+pub fn richtung(z: &Zone) -> &'static str {
+    match (z.vertical, z.reverse) {
+        (true, false) => "↓",
+        (true, true) => "↑",
+        (false, false) => "→",
+        (false, true) => "←",
     }
 }
 
@@ -824,6 +836,30 @@ mod tests {
         ausfuehren(Aktion::ZonenAufKanten, &mut o, &k, Instant::now());
         // Die Zonen folgen aufeinander: 0, 30, 60, 90.
         assert_eq!(o.config.zone_starts(), vec![0, 30, 60, 90]);
+        // Ein Ring im Uhrzeigersinn: unten und links laufen zurück (#32).
+        let rueck: Vec<bool> = o.config.zones.iter().map(|z| z.reverse).collect();
+        assert_eq!(rueck, vec![false, false, true, true]);
+    }
+
+    #[test]
+    fn geraet_je_kante_laeuft_vorwaerts() {
+        // Getrennte Streifen: jeder beginnt an seinem Anfang.
+        let (k, _) = kern(vec![]);
+        let mut o = mit_geraet();
+        ausfuehren(Aktion::GeraetJeKante, &mut o, &k, Instant::now());
+        assert!(o.config.zones.iter().all(|z| !z.reverse));
+    }
+
+    #[test]
+    fn richtungspfeil_folgt_der_zone() {
+        let mut z = Zone::preset(ZonePreset::Left, "d".into(), 10, [0, 0, 0]);
+        assert_eq!(richtung(&z), "↓");
+        z.reverse = true;
+        assert_eq!(richtung(&z), "↑");
+        z.vertical = false;
+        assert_eq!(richtung(&z), "←");
+        z.reverse = false;
+        assert_eq!(richtung(&z), "→");
     }
 
     #[test]
