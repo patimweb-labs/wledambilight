@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.1](https://github.com/patimweb-labs/wledambilight/compare/v0.7.0...v0.7.1) (2026-11-22)
+
+
+### Bug fixes
+
+* Laufrichtung pro Zone umkehrbar ([#32](https://github.com/patimweb-labs/wledambilight/issues/32)) ([#35](https://github.com/patimweb-labs/wledambilight/issues/35)) ([c1e9a19](https://github.com/patimweb-labs/wledambilight/commit/c1e9a197fec14f9ebffca74968ea8683addb30f7))
+
 ## [0.7.0](https://github.com/patimweb-labs/wledambilight/compare/v0.6.0...v0.7.0) (2026-11-22)
 
 
