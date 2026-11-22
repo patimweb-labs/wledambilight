@@ -6,19 +6,14 @@
 
 //! WLED Ambilight — screen capture to WLED, on Linux, Windows and macOS.
 //!
-//! The window is a web application (Vue). This file starts the pipeline, the tray
-//! and the command layer; the user interface lives in `ui/`.
+//! Das Fenster ist egui (`crates/fenster`), der Kern liegt in `crates/core`.
+//! Hier stehen nur die Kommandozeile und der Betrieb ohne Fenster.
 
 use std::time::Duration;
 
-use tauri::{Emitter, Manager};
-
 use wled_ambilight::config::{self, Config};
-use wled_ambilight::state::AppState;
-use wled_ambilight::{commands, i18n, tray, worker};
+use wled_ambilight::{i18n, worker};
 
-/// Reverse-DNS id: Wayland app id, desktop file, Flatpak, icon name.
-pub const APP_ID: &str = "io.github.smotherer007.WledAmbilight";
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 const HELP: &str = "\
@@ -99,24 +94,6 @@ mod quit_signals {
     }
 }
 
-/// Schickt Messwerte an die Oberfläche, solange das Fenster offen ist.
-///
-/// Ein Ereignis statt Polling: die Oberfläche zeichnet, was ankommt, und fragt
-/// nichts selbst ab. 200 ms sind schnell genug für Zähler und die LED-Leiste.
-fn start_telemetry(handle: tauri::AppHandle) {
-    std::thread::Builder::new()
-        .name("telemetry".into())
-        .spawn(move || loop {
-            std::thread::sleep(Duration::from_millis(200));
-            let state = handle.state::<AppState>();
-            let telemetry = commands::telemetry_now(state);
-            if handle.emit("telemetry", telemetry).is_err() {
-                break; // Fenster weg: Thread beenden
-            }
-        })
-        .ok();
-}
-
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let mut run_headless = false;
@@ -155,58 +132,5 @@ fn main() {
         headless();
     }
 
-    let cfg = Config::load();
-    i18n::init(&cfg.settings.language);
-
-    tauri::Builder::default()
-        .manage(AppState::new(&cfg, minimized))
-        .invoke_handler(tauri::generate_handler![
-            commands::snapshot,
-            commands::telemetry_now,
-            commands::save_config,
-            commands::restart_capture,
-            commands::forget_permission,
-            commands::set_paused,
-            commands::monitors,
-            commands::discover,
-            commands::zone_preset,
-            commands::device_template,
-            commands::probe_wled,
-            commands::pair_nanoleaf,
-            commands::list_openrgb,
-            commands::preview_frame,
-        ])
-        .setup(move |app| {
-            tray::install(app)?;
-            if minimized {
-                if let Some(window) = app.get_webview_window("main") {
-                    let _ = window.hide();
-                }
-            }
-            start_telemetry(app.handle().clone());
-            Ok(())
-        })
-        .on_window_event(|window, event| {
-            // Im Autostart-Modus (--minimized) legt Schliessen das Fenster nur weg,
-            // damit Aufnahme und Taskleisten-Symbol weiterlaufen. In allen anderen
-            // Faellen beendet Schliessen die Anwendung — wie jedes andere Programm.
-            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                let keep = window.app_handle().state::<AppState>().keep_in_tray();
-                if keep {
-                    api.prevent_close();
-                    let _ = window.hide();
-                } else {
-                    window.app_handle().exit(0);
-                }
-            }
-        })
-        .build(tauri::generate_context!())
-        .expect("error while building WLED Ambilight")
-        .run(|app, event| {
-            // Beenden über Fenster, Tray oder System: erst die Geräte sauber
-            // freigeben (Razer-Sitzung schließen, Govee/Nanoleaf zurückgeben).
-            if let tauri::RunEvent::Exit = event {
-                app.state::<AppState>().shutdown();
-            }
-        });
+    wled_ambilight_fenster::betrieb::starten(minimized);
 }

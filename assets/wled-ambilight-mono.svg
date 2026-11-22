@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <title>WLED Ambilight</title>
+  <defs>
+    <linearGradient id="kachel" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#1A1E26"/><stop offset="1" stop-color="#101318"/></linearGradient>
+    <radialGradient id="dunst" cx=".5" cy=".3" r=".5">
+      <stop offset="0" stop-color="#1E46D8" stop-opacity=".45"/><stop offset="1" stop-color="#1E46D8" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect x="8" y="8" width="496" height="496" rx="104" fill="url(#kachel)" stroke="#3A3F4A" stroke-width="8"/>
+  
+  <g transform="translate(256 262) scale(.9) translate(-256 -247)">
+    <rect x="104" y="80" width="24" height="24" fill="#C6C6C6" opacity="0.85"/>
+    <rect x="384" y="80" width="24" height="24" fill="#C6C6C6" opacity="0.85"/>
+    <rect x="60" y="112" width="24" height="24" fill="#C6C6C6" opacity="0.75"/>
+    <rect x="428" y="112" width="24" height="24" fill="#C6C6C6" opacity="0.75"/>
+    <rect x="36" y="168" width="16" height="16" fill="#C6C6C6" opacity="0.5"/>
+    <rect x="460" y="168" width="16" height="16" fill="#C6C6C6" opacity="0.5"/>
+    <rect x="40" y="296" width="16" height="16" fill="#C6C6C6" opacity="0.5"/>
+    <rect x="456" y="296" width="16" height="16" fill="#C6C6C6" opacity="0.5"/>
+    <rect x="60" y="360" width="24" height="24" fill="#C6C6C6" opacity="0.85"/>
+    <rect x="428" y="360" width="24" height="24" fill="#C6C6C6" opacity="0.85"/>
+    <rect x="88" y="344" width="16" height="16" fill="#C6C6C6" opacity="0.6"/>
+    <rect x="408" y="344" width="16" height="16" fill="#C6C6C6" opacity="0.6"/>
+    <rect x="104" y="392" width="24" height="24" fill="#C6C6C6" opacity="0.8"/>
+    <rect x="384" y="392" width="24" height="24" fill="#C6C6C6" opacity="0.8"/>
+    <rect x="160" y="104" width="192" height="40" fill="#FFFFFF"/>
+    <rect x="64" y="160" width="36" height="72" fill="#FFFFFF"/>
+    <rect x="64" y="248" width="36" height="80" fill="#FFFFFF"/>
+    <rect x="412" y="160" width="36" height="72" fill="#FFFFFF"/>
+    <rect x="412" y="248" width="36" height="80" fill="#FFFFFF"/>
+    <path fill-rule="evenodd" fill="#FFFFFF" d="M124 128H388A12 12 0 0 1 400 140V340A12 12 0 0 1 388 352H124A12 12 0 0 1 112 340V140A12 12 0 0 1 124 128ZM140 156V324H372V156Z"/>
+    <rect x="140" y="156" width="232" height="168" fill="#1A1D24"/>
+    <rect x="232" y="352" width="48" height="16" fill="#FFFFFF"/>
+    <rect x="168" y="368" width="176" height="24" rx="6" fill="#FFFFFF"/>
+  </g>
+</svg>

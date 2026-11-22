@@ -1,0 +1,44 @@
+[package]
+name = "wled-ambilight-core"
+# Fest: die Programmversion steht im Wurzelpaket (release-please hebt nur
+# dort an); dieses Crate wird nicht einzeln veröffentlicht.
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.90"
+description = "WLED Ambilight: Aufnahme, Sampling, Ausgabe und Konfiguration – ohne Fenster"
+license = "GPL-3.0-or-later"
+publish = false
+
+# Der Kern heißt als Bibliothek weiter `wled_ambilight`: Fenster, Binary und
+# Tests schreiben `wled_ambilight::config`, wie vor dem Umzug nach `crates/`.
+[lib]
+name = "wled_ambilight"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow = "1"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+mdns-sd = "0.21"
+dirs = "7"
+sys-locale = "0.3"
+# HTTP für Razer Chroma (localhost) und Nanoleaf (LAN); kein TLS nötig
+ureq = { version = "3", default-features = false, features = ["json"] }
+# Fenstergriff, um das eigene Fenster aus der Aufnahme zu nehmen (Windows).
+# Auf allen Plattformen dabei, damit der Aufruf ohne Plattformweiche bleibt.
+raw-window-handle = "0.6"
+
+# Linux: xdg-desktop-portal + PipeWire (über GStreamer)
+[target.'cfg(target_os = "linux")'.dependencies]
+ashpd = { version = "0.13", features = ["screencast"] }
+libc = "0.2"
+tokio = { version = "1", features = ["rt", "macros", "time"] }
+
+# Windows: Windows Graphics Capture
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-capture = "2"
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
+
+# macOS: ScreenCaptureKit
+[target.'cfg(target_os = "macos")'.dependencies]
+screencapturekit = "11"

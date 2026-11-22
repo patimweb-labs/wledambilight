@@ -53,11 +53,6 @@
         {
           "type": "generic",
           "path": "packaging/linux/io.github.smotherer007.WledAmbilight.metainfo.xml"
-        },
-        {
-          "type": "json",
-          "path": "tauri.conf.json",
-          "jsonpath": "$.version"
         }
       ]
     }

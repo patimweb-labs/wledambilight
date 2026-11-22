@@ -1,3 +1,5 @@
+<img src="assets/icons/icon-256.png" alt="WLED Ambilight" width="96" align="right">
+
 # WLED Ambilight
 
 [![CI](https://github.com/Smotherer007/wledambilight/actions/workflows/ci.yml/badge.svg)](https://github.com/Smotherer007/wledambilight/actions/workflows/ci.yml)
@@ -13,9 +15,9 @@ Govee lights and Nanoleaf panels – the light behind your monitor or TV and
 on your desk follows the picture. Runs on **Linux, Windows and macOS**,
 entirely in your local network: no account, no cloud.
 
-![WLED Ambilight: capture, live LED strip and device states](docs/screenshot.png)
+![WLED Ambilight (dark): devices, zones on the screen, live output](docs/bilder/fenster-dark-1400.png)
 
-![Zones on the screen, filled with the colours that actually leave the app](docs/screenshot-zones.png)
+![WLED Ambilight (light): the same window in the light theme](docs/bilder/fenster-light-1400.png)
 
 ## Features
 
@@ -41,12 +43,12 @@ entirely in your local network: no account, no cloud.
 - **Frame rate** 24–144 fps globally, plus a cap per device.
 - **Test picture** – instead of the screen, a rainbow running left → right
   with a white bar, a white frame and a centre cross: check zones, direction
-  and colours without handing out the screen. Toggle on the *Overview* tab, or start with `AMBILIGHT_STATS=1`.
+  and colours without handing out the screen. Toggle *Test picture* in the header, or start with `AMBILIGHT_DEMO=1`.
   Once switched to the screen the permission stays for the session, so
   switching back and forth is instant.
 - **Live view** – the preview shows the light each zone throws onto the wall,
   a ruler with the colour of every LED, and the exact output per device.
-- **Background operation** – tray / menu bar icon, close-to-tray,
+- **Background operation** – tray / menu bar icon (show, pause, quit),
   `--minimized` for autostart, `--headless` for setups without a desktop.
 - **German and English** interface, following the system language.
 
@@ -180,7 +182,7 @@ is not notarised, macOS says the app “cannot be checked”: right-click the ap
 | Nudge the selected zone | arrow keys, with <kbd>Shift</kbd> in big steps |
 | Delete the selected zone | <kbd>Delete</kbd> |
 | Deselect | <kbd>Esc</kbd> |
-| Pause / resume | button on the *Overview* tab or in the tray menu (the LEDs keep their colour) |
+| Pause / resume | *Pause* in the header or in the tray menu (the LEDs keep their colour) |
 | Hide to tray | close the window; quit from the tray menu |
 
 ### Picture settings
@@ -242,35 +244,21 @@ the file can be copied between machines. The file is written atomically.
 It contains the Nanoleaf pairing token (which only grants access to that one
 device in your network), so don't post it publicly.
 
-## Design and your own themes
+## Design
 
-Every colour of the window comes from one palette (wall, panel, surface,
-raised, line, ink, accent, ok, warn, error). A theme is such a palette;
-switching it on the *App* tab under *Design* swaps the values, no restart.
-
-Four themes are built in:
+Every colour, size and spacing of the window comes from design tokens
+(`crates/fenster/tokens/`), the colours from the logo: cyan from the top of
+the screen, ember from its foot. Three themes, switched on the *App* tab under
+*Design* without a restart:
 
 | Theme | Look |
 | --- | --- |
-| **Crosspoint** (default) | blue-black blueprint (`#060A12`), signal green `#39DD93` |
-| **Crosspoint Hell** | light background, dark text, same accent |
+| **Dark** (default) | night blue (`#070A12`), cyan accent `#23F0FE`, ember `#FD860E` |
+| **Light** | light background, dark text, darker cyan for contrast |
 | **Mono** | black and white with high contrast, colour carries no meaning |
-| **Amber** | the original warm white of the first version |
 
-**Write your own:** one JSON file per theme in
-
-```text
-~/.config/wled-ambilight/themes/          (Flatpak: ~/.var/app/…/config/wled-ambilight/themes/)
-```
-
-Every field is optional and is laid over the default theme, so a typo in the
-file changes one colour, not the whole window. Unknown or broken files are
-reported on the *App* tab under *Design* instead of being swallowed silently.
-Template: `docs/theme-beispiel.json`.
-
-```json
-{ "name": "My theme", "accent": "#FF7A45", "wall": "#0A0710", "ink": "#F2E9FF" }
-```
+There are no user themes and no theme editor any more; older configurations
+with another theme name start in *Dark*.
 
 ## How it works
 
@@ -325,45 +313,42 @@ macOS the window is excluded from the capture instead.
 
 ## How it is built
 
-The window is a web application (Vue 3 + TypeScript), delivered by
-[Tauri 2](https://tauri.app). Rust keeps the work: screen capture, sampling,
-device output, configuration. The interface talks to it through a small command
-layer — no second copy of the truth, no logic in the window.
-
-The components come from a shared library used by all of my applications
-(`weppelmann-ui`: atoms, molecules, organisms, three themes). It is not
-published; the build expects it next to this repository.
+Pure Rust in one process: the window is [egui](https://github.com/emilk/egui)
+(eframe, glow renderer, AccessKit for screen readers), the core does screen
+capture, sampling, device output and configuration. No web view, no Node.
 
 ```
-src/            Rust core: capture, sampler, engine, output, config, commands
-src/commands.rs the contract between window and core
-ui/             Vue application (views, zone editor, LED strip)
-packaging/      Flatpak, .deb/.rpm, Windows installer, macOS bundle
+crates/core/     core: capture, sampler, engine, output, config, telemetry
+crates/fenster/  window: model, logic, views, widgets, themes from tokens, tray
+src/main.rs      command line, headless mode
+assets/          logo (SVG source) and the icons generated from it
+packaging/       Flatpak, .deb/.rpm, Windows installer, macOS bundle, icons
 ```
+
+The architecture is described in [docs/architektur.md](docs/architektur.md),
+the decisions in [docs/adr/](docs/adr/).
 
 ## Building from source
 
-Requirements: [Rust](https://rustup.rs/) 1.90 or newer, [Node](https://nodejs.org/) 20 or newer,
-and the Tauri system libraries.
+Requirement: [Rust](https://rustup.rs/) 1.90 or newer – nothing else.
 
-- **Linux:** `webkit2gtk-4.1`, `libayatana-appindicator3`, `librsvg2`
-  (development packages); at runtime `gst-launch-1.0` with `pipewiresrc` and a
-  running xdg-desktop-portal.
-- **Windows:** WebView2 (preinstalled on Windows 11) and the MSVC toolchain.
+- **Linux:** no extra build dependencies (Wayland, X11 and OpenGL are loaded at
+  runtime). At runtime `gst-launch-1.0` with `pipewiresrc` and a running
+  xdg-desktop-portal.
+- **Windows:** the MSVC toolchain (Visual Studio Build Tools).
 - **macOS:** Xcode or the Command Line Tools (13.0 SDK or newer).
 
 ```sh
 git clone https://github.com/Smotherer007/wledambilight.git
 cd wledambilight
-npm install                 # tooling and interface
-npm --prefix ui run build   # the window is needed before the Rust build
 cargo run --release
-cargo test
+cargo test --workspace
 ```
 
-For development, `npm --prefix ui run dev` (port 1420) plus
-`cargo run` gives live reload of the window. `npm run tauri build` produces the
-bundles.
+The window tests (`crates/fenster/tests/oberflaeche.rs`) drive the window
+through AccessKit without a screen. `WLED_BILDER=docs/bilder cargo test -p
+wled-ambilight-fenster --test oberflaeche` also writes the screenshots of this
+README. Icons are generated from the SVG with `packaging/icons/erzeugen.sh`.
 
 Packaging (Flatpak, `.deb`, `.rpm`, installer, `.dmg`) runs in GitHub
 Actions; see [CONTRIBUTING.md](CONTRIBUTING.md) for the release process and

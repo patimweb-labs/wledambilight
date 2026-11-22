@@ -1,3 +1,5 @@
+<img src="assets/icons/icon-256.png" alt="WLED Ambilight" width="96" align="right">
+
 # WLED Ambilight
 
 [![CI](https://github.com/Smotherer007/wledambilight/actions/workflows/ci.yml/badge.svg)](https://github.com/Smotherer007/wledambilight/actions/workflows/ci.yml)
@@ -13,9 +15,9 @@ Chroma), Govee-Leuchten und Nanoleaf-Panels – das Licht hinter Monitor oder
 Fernseher und auf dem Schreibtisch folgt dem Bild. Läuft unter **Linux, Windows
 und macOS**, komplett im lokalen Netz: kein Konto, keine Cloud.
 
-![WLED Ambilight: Aufnahme, LED-Leiste und Gerätestatus](docs/screenshot.png)
+![WLED Ambilight (dunkel): Geräte, Zonen auf dem Bildschirm, Ausgabe live](docs/bilder/fenster-dark-1400.png)
 
-![Zonen auf dem Bildschirm, gefüllt mit den Farben, die wirklich rausgehen](docs/screenshot-zones.png)
+![WLED Ambilight (hell): dasselbe Fenster im hellen Theme](docs/bilder/fenster-light-1400.png)
 
 ## Funktionen
 
@@ -252,35 +254,38 @@ atomar geschrieben (kein halb geschriebener Zustand bei Absturz). Sie enthält
 den Nanoleaf-Kopplungsschlüssel (gilt nur für dieses eine Gerät im eigenen
 Netz) – also nicht öffentlich posten.
 
-## Design und eigene Themes
+## Design
 
-Die Oberfläche holt **jede** Farbe aus einem Farbsatz (Wall, Panel, Surface,
-Raised, Line, Ink, Accent, Ok, Warn, Error). Ein Theme ist so ein Satz; der
-Wechsel im Reiter *App* unter *Design* tauscht nur die Werte, ohne Neustart.
-
-Eingebaut sind vier Themes:
+Jede Farbe, Größe und jeder Abstand im Fenster kommt aus Design-Tokens
+(`crates/fenster/tokens/`), die Farben aus dem Logo: Cyan vom oberen Rand des
+Bildschirms, Glut von seinem Fuß. Drei Themes, umgeschaltet im Reiter *App*
+unter *Design*, ohne Neustart:
 
 | Theme | Aussehen |
 | --- | --- |
-| **Crosspoint** (Standard) | blauschwarzes Blueprint (`#060A12`), Signalgrün `#39DD93` |
-| **Crosspoint Hell** | heller Grund, dunkle Schrift, gleicher Akzent |
+| **Dunkel** (Standard) | Nachtblau (`#070A12`), Akzent Cyan `#23F0FE`, Glut `#FD860E` |
+| **Hell** | heller Grund, dunkle Schrift, dunkleres Cyan für den Kontrast |
 | **Mono** | Schwarz/Weiß mit hohem Kontrast, Farbe trägt keine Bedeutung |
-| **Amber** | das ursprüngliche Warmweiß der ersten Version |
 
-**Eigenes Theme anlegen:** eine JSON-Datei pro Theme in
+Eigene Themes und einen Theme-Editor gibt es nicht mehr; ältere
+Konfigurationen mit anderem Theme-Namen starten in *Dunkel*.
 
-```text
-~/.config/wled-ambilight/themes/          (Flatpak: ~/.var/app/…/config/wled-ambilight/themes/)
+## Aufbau
+
+Reines Rust in einem Prozess: das Fenster ist [egui](https://github.com/emilk/egui)
+(eframe, Renderer glow, AccessKit für Screenreader), der Kern übernimmt
+Aufnahme, Sampling, Geräteausgabe und Konfiguration. Kein WebView, kein Node.
+
+```
+crates/core/     Kern: Aufnahme, Sampler, Engine, Ausgabe, Konfiguration, Telemetrie
+crates/fenster/  Fenster: Modell, Logik, Ansichten, Bausteine, Themes aus Tokens, Tray
+src/main.rs      Kommandozeile, Betrieb ohne Fenster
+assets/          Logo (SVG-Quelle) und die daraus erzeugten Icons
+packaging/       Flatpak, .deb/.rpm, Windows-Installer, macOS-Bundle, Icons
 ```
 
-Jedes Feld ist optional und legt sich über das Standard-Theme – ein Tippfehler
-in der Datei ändert also eine Farbe, nicht das ganze Fenster. Unbekannte oder
-kaputte Dateien werden im Reiter *App* unter *Design* gemeldet, nicht still
-verschluckt. Vorlage: `docs/theme-beispiel.json`.
-
-```json
-{ "name": "Mein Theme", "accent": "#FF7A45", "wall": "#0A0710", "ink": "#F2E9FF" }
-```
+Den Aufbau beschreibt [docs/architektur.md](docs/architektur.md), die
+Entscheidungen stehen in [docs/adr/](docs/adr/).
 
 ## Funktionsweise
 
@@ -338,10 +343,11 @@ ausgeblendet.
 
 ## Selbst bauen
 
-Voraussetzung: [Rust](https://rustup.rs/) 1.90 oder neuer.
+Voraussetzung: [Rust](https://rustup.rs/) 1.90 oder neuer – sonst nichts.
 
-- **Linux:** zur Laufzeit `gst-launch-1.0` mit `pipewiresrc` und ein laufendes
-  xdg-desktop-portal. Keine zusätzlichen Build-Abhängigkeiten.
+- **Linux:** keine zusätzlichen Build-Abhängigkeiten (Wayland, X11 und OpenGL
+  werden zur Laufzeit geladen). Zur Laufzeit `gst-launch-1.0` mit
+  `pipewiresrc` und ein laufendes xdg-desktop-portal.
 - **Windows:** die MSVC-Toolchain (Visual Studio Build Tools).
 - **macOS:** Xcode oder die Command Line Tools (SDK 13.0 oder neuer).
 
@@ -349,8 +355,14 @@ Voraussetzung: [Rust](https://rustup.rs/) 1.90 oder neuer.
 git clone https://github.com/Smotherer007/wledambilight.git
 cd wledambilight
 cargo run --release
-cargo test
+cargo test --workspace
 ```
+
+Die Fenstertests (`crates/fenster/tests/oberflaeche.rs`) bedienen das Fenster
+über AccessKit, ohne Bildschirm. `WLED_BILDER=docs/bilder cargo test -p
+wled-ambilight-fenster --test oberflaeche` schreibt dabei auch die
+Bildschirmfotos dieser README. Die Icons entstehen aus dem SVG mit
+`packaging/icons/erzeugen.sh`.
 
 Die Pakete (Flatpak, `.deb`, `.rpm`, Installer, `.dmg`) baut GitHub Actions;
 den Release-Ablauf beschreibt [CONTRIBUTING.md](CONTRIBUTING.md), Flatpak und

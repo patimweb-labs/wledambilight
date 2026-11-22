@@ -77,47 +77,17 @@ jobs:
           gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 ||
             gh release create "$TAG" -R "$GITHUB_REPOSITORY" --title "$TAG" --generate-notes --verify-tag
 
-  # Die Oberfläche wird einmal hier gebaut und an alle Plattformen verteilt.
-  # `--features custom-protocol` bettet sie ein; ohne sie zeigt das Paket auf
-  # `devUrl` (localhost:1420) und das Fenster bleibt schwarz.
-  ui:
+  # Der Offline-Crate-Plan für Flatpak braucht Python mit aiohttp/tomlkit;
+  # im Flatpak-Builder-Container fehlt beides.
+  sources:
     needs: prepare
     if: always() && needs.prepare.result == 'success'
-    name: Oberfläche
+    name: Crate-Quellen
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare.outputs.tag }}
-      # Öffentliches Repository, kein Token nötig.
-      - name: Oberflächen-Bibliothek
-        uses: actions/checkout@v7
-        with:
-          repository: Smotherer007/weppelmann-ui
-          path: weppelmann-ui
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - name: Tokens bauen
-        working-directory: weppelmann-ui
-        run: |
-          npm install --no-audit --no-fund
-          npm run -w @weppelmann/tokens build
-      # `ui/package.json` verweist per `file:../../weppelmann-ui` auf die
-      # Bibliothek **neben** dem Projekt.
-      - name: Bibliothek neben das Projekt legen
-        shell: bash
-        run: mv "$GITHUB_WORKSPACE/weppelmann-ui" "$GITHUB_WORKSPACE/../weppelmann-ui"
-      - name: Oberfläche bauen
-        run: |
-          npm install --no-audit --no-fund
-          npm --prefix ui run build
-      - uses: actions/upload-artifact@v7
-        with:
-          name: ui-dist
-          path: ui/dist
-      # Der Offline-Crate-Plan für Flatpak braucht Python mit aiohttp/tomlkit;
-      # im Flatpak-Builder-Container fehlt beides.
       - name: Crate-Quellen für Flatpak
         run: |
           python3 -m pip install --quiet aiohttp tomlkit
@@ -129,11 +99,11 @@ jobs:
 
   # ---------------------------------------------------------------- Linux
   linux:
-    needs: [prepare, ui]
+    needs: prepare
     # Ohne eigenes always() überspringt GitHub diesen Job, sobald im Lauf schon
     # ein Job übersprungen wurde (`release-please` bei Tag-Push und
     # workflow_dispatch). Ergebnis: keine Pakete, stiller Fehlschlag.
-    if: always() && needs.prepare.result == 'success' && needs.ui.result == 'success'
+    if: always() && needs.prepare.result == 'success'
     name: Linux (${{ matrix.arch }})
     strategy:
       fail-fast: false
@@ -156,22 +126,12 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-deb,cargo-generate-rpm
-      # Tauri braucht auf Linux die WebKit-/GTK-Entwicklungspakete; ohne sie
-      # bricht der Bau in pango-sys ab.
-      - name: Linux-Abhängigkeiten
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev \
-            librsvg2-dev patchelf
+      # Das Fenster (egui) lädt Wayland/X11 und OpenGL zur Laufzeit; zum Bauen
+      # braucht es keine Systembibliotheken.
       - name: Stamp release date into the metainfo
         run: sed -i -E "s/(<release version=\"$VERSION\" date=\")[0-9-]+/\1$(date -u +%F)/" packaging/linux/*.metainfo.xml
-      - uses: actions/download-artifact@v8
-        with:
-          name: ui-dist
-          path: ui/dist
       - name: Build
-        run: cargo build --release --locked --features custom-protocol
+        run: cargo build --release --locked
       - name: Package
         run: |
           set -euo pipefail
@@ -182,7 +142,8 @@ jobs:
           install -Dm644 packaging/linux/*.desktop -t "$root/share/applications/"
           install -Dm644 packaging/linux/*.metainfo.xml -t "$root/share/metainfo/"
           install -Dm644 assets/icon.svg "$root/share/icons/hicolor/scalable/apps/io.github.smotherer007.WledAmbilight.svg"
-          for s in 16 32 48 64 128 256 512; do
+          install -Dm644 assets/wled-ambilight-symbolic.svg "$root/share/icons/hicolor/symbolic/apps/io.github.smotherer007.WledAmbilight-symbolic.svg"
+          for s in 16 24 32 48 64 128 256 512; do
             install -Dm644 "assets/icons/icon-$s.png" "$root/share/icons/hicolor/${s}x${s}/apps/io.github.smotherer007.WledAmbilight.png"
           done
           install -Dm644 LICENSE README.md -t "$root/"
@@ -198,8 +159,8 @@ jobs:
           path: dist/*
 
   flatpak:
-    needs: [prepare, ui]
-    if: always() && needs.prepare.result == 'success' && needs.ui.result == 'success'
+    needs: [prepare, sources]
+    if: always() && needs.prepare.result == 'success' && needs.sources.result == 'success'
     name: Flatpak
     runs-on: ubuntu-latest
     container:
@@ -209,14 +170,8 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare.outputs.tag }}
-          submodules: recursive
-      # Oberfläche und Offline-Crate-Liste entstehen im Job `ui`: der
-      # Builder-Container hat weder npm noch dnf (`dnf: command not found`),
-      # und `npm ci` scheitert dort ohnehin am fehlenden Lockfile in `ui/`.
-      - uses: actions/download-artifact@v8
-        with:
-          name: ui-dist
-          path: ui/dist
+      # Die Offline-Crate-Liste entsteht im Job `sources`: der
+      # Builder-Container hat kein pip.
       - uses: actions/download-artifact@v8
         with:
           name: flatpak-cargo-sources
@@ -234,8 +189,8 @@ jobs:
 
   # ---------------------------------------------------------------- Windows
   windows:
-    needs: [prepare, ui]
-    if: always() && needs.prepare.result == 'success' && needs.ui.result == 'success'
+    needs: prepare
+    if: always() && needs.prepare.result == 'success'
     name: Windows
     runs-on: windows-latest
     env:
@@ -246,12 +201,8 @@ jobs:
           ref: ${{ needs.prepare.outputs.tag }}
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - uses: actions/download-artifact@v8
-        with:
-          name: ui-dist
-          path: ui/dist
       - name: Build
-        run: cargo build --release --locked --features custom-protocol
+        run: cargo build --release --locked
       - name: Portable zip
         shell: pwsh
         run: |
@@ -278,8 +229,8 @@ jobs:
 
   # ---------------------------------------------------------------- macOS
   macos:
-    needs: [prepare, ui]
-    if: always() && needs.prepare.result == 'success' && needs.ui.result == 'success'
+    needs: prepare
+    if: always() && needs.prepare.result == 'success'
     name: macOS (universal)
     runs-on: macos-latest
     env:
@@ -301,14 +252,10 @@ jobs:
         with:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
       - uses: Swatinem/rust-cache@v2
-      - uses: actions/download-artifact@v8
-        with:
-          name: ui-dist
-          path: ui/dist
       - name: Build (arm64 + x86_64)
         run: |
-          cargo build --release --locked --features custom-protocol --target aarch64-apple-darwin
-          cargo build --release --locked --features custom-protocol --target x86_64-apple-darwin
+          cargo build --release --locked --target aarch64-apple-darwin
+          cargo build --release --locked --target x86_64-apple-darwin
       - name: App bundle
         run: |
           set -euo pipefail
@@ -374,8 +321,8 @@ jobs:
     if: always() && needs.prepare.result == 'success'
     runs-on: ubuntu-latest
     steps:
-      # Alle Artefakte abholen, auch `ui-dist` und `flatpak-cargo-sources` aus
-      # dem Job `ui` — die gehören aber nicht in das Release. Deshalb erst in
+      # Alle Artefakte abholen, auch `flatpak-cargo-sources` aus dem Job
+      # `sources` — das gehört aber nicht in das Release. Deshalb erst in
       # Unterordner laden und dann nur die Pakete einsammeln.
       - uses: actions/download-artifact@v8
         with:
