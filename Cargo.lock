@@ -5224,7 +5224,7 @@ dependencies = [
 
 [[package]]
 name = "wled-ambilight"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "libc",
  "winresource",
@@ -5234,7 +5234,7 @@ dependencies = [
 
 [[package]]
 name = "wled-ambilight-core"
-version = "0.1.0"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "ashpd",
@@ -5254,7 +5254,7 @@ dependencies = [
 
 [[package]]
 name = "wled-ambilight-fenster"
-version = "0.1.0"
+version = "0.7.0"
 dependencies = [
  "eframe",
  "egui",
