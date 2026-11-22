@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.7.0](https://github.com/patimweb-labs/wledambilight/compare/v0.6.0...v0.7.0) (2026-11-22)
+
+
+### ⚠ BREAKING CHANGES
+
+* Oberfläche in egui statt Tauri und Vue – reines Rust ([#33](https://github.com/patimweb-labs/wledambilight/issues/33))
+
+### Features
+
+* Oberfläche in egui statt Tauri und Vue – reines Rust ([#33](https://github.com/patimweb-labs/wledambilight/issues/33)) ([e570f4c](https://github.com/patimweb-labs/wledambilight/commit/e570f4c6564e59249949452247eefab7ce5b7761))
+
 ## [0.6.0](https://github.com/patimweb-labs/wledambilight/compare/v0.5.6...v0.6.0) (2026-11-17)
 
 

@@ -2,7 +2,7 @@
 name = "wled-ambilight-fenster"
 # Fest: die Programmversion steht im Wurzelpaket (release-please hebt nur
 # dort an); dieses Crate wird nicht einzeln veröffentlicht.
-version = "0.1.0"
+version = "0.7.0"
 edition = "2021"
 rust-version = "1.90"
 description = "WLED Ambilight: das Fenster in egui, direkt auf dem laufenden Kern"
